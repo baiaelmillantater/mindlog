@@ -25,7 +25,7 @@ http://127.0.0.1:4173
 
 ## Deploy su Vercel
 
-Il progetto è statico e non richiede variabili ambiente obbligatorie.
+Il progetto usa frontend statico + API serverless.
 
 - Framework preset: `Other`
 - Build command: lasciare vuoto
@@ -33,4 +33,8 @@ Il progetto è statico e non richiede variabili ambiente obbligatorie.
 
 ## Nota importante
 
-L'app usa `localStorage`, quindi i dati restano nel browser e non vengono sincronizzati tra dispositivi diversi.
+L'app online sincronizza i dati tra dispositivi.
+
+- Se imposti `DATABASE_URL`, MindLog usa Postgres come storage principale.
+- Se `DATABASE_URL` non è presente, usa il fallback remoto cifrato su GitHub.
+- Il `localStorage` resta solo come cache locale di supporto al frontend.

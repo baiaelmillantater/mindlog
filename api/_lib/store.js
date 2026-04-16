@@ -184,6 +184,51 @@ function githubConfig() {
   return { token, repo, branch, path };
 }
 
+function databaseConfig() {
+  const connectionString = env("DATABASE_URL");
+  return {
+    connectionString,
+    enabled: Boolean(connectionString)
+  };
+}
+
+let poolPromise = null;
+
+async function getDatabasePool() {
+  if (!databaseConfig().enabled) {
+    return null;
+  }
+  if (!poolPromise) {
+    poolPromise = (async () => {
+      const postgres = await import("pg");
+      const Pool = postgres.Pool;
+      return new Pool({
+        connectionString: databaseConfig().connectionString,
+        max: 1,
+        ssl: databaseConfig().connectionString.includes("localhost")
+          ? false
+          : { rejectUnauthorized: false }
+      });
+    })();
+  }
+  return poolPromise;
+}
+
+async function ensureDatabaseSchema() {
+  const pool = await getDatabasePool();
+  if (!pool) {
+    return null;
+  }
+  await pool.query(`
+    create table if not exists mindlog_state (
+      id text primary key,
+      payload jsonb not null,
+      updated_at timestamptz not null default now()
+    )
+  `);
+  return pool;
+}
+
 async function githubRequest(path, options = {}) {
   const { token } = githubConfig();
   const response = await fetch(`https://api.github.com${path}`, {
@@ -411,6 +456,26 @@ export function createPatientPayload(state, patientId) {
 }
 
 export async function loadRemoteState() {
+  if (databaseConfig().enabled) {
+    const pool = await ensureDatabaseSchema();
+    const result = await pool.query(
+      "select payload from mindlog_state where id = $1 limit 1",
+      ["primary"]
+    );
+    if (!result.rows.length) {
+      const initial = normalizeState(createBaseState());
+      await pool.query(
+        "insert into mindlog_state (id, payload, updated_at) values ($1, $2::jsonb, now())",
+        ["primary", JSON.stringify(initial)]
+      );
+      return { state: initial, sha: null };
+    }
+    return {
+      state: normalizeState(result.rows[0].payload),
+      sha: null
+    };
+  }
+
   const { repo, branch, path } = githubConfig();
   const response = await fetch(`https://api.github.com/repos/${repo}/contents/${path}?ref=${encodeURIComponent(branch)}`, {
     headers: {
@@ -436,6 +501,24 @@ export async function loadRemoteState() {
 
 export async function saveRemoteState(nextState, sha = null, message = "Aggiorna archivio MindLog") {
   const normalized = normalizeState(nextState);
+
+  if (databaseConfig().enabled) {
+    const pool = await ensureDatabaseSchema();
+    await pool.query(
+      `
+        insert into mindlog_state (id, payload, updated_at)
+        values ($1, $2::jsonb, now())
+        on conflict (id)
+        do update set payload = excluded.payload, updated_at = now()
+      `,
+      ["primary", JSON.stringify(normalized)]
+    );
+    return {
+      state: normalized,
+      sha: null
+    };
+  }
+
   const encrypted = encryptPayload(JSON.stringify(normalized));
   const { repo, branch, path } = githubConfig();
   const currentSha = sha || (await loadRemoteState()).sha || undefined;
