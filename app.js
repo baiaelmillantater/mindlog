@@ -1,4 +1,6 @@
-const STORAGE_KEY = "mindlog_app_v4";
+const STORAGE_KEY = "mindlog_state_cache_v5";
+const SESSION_KEY = "mindlog_session_v1";
+const REMOTE_SYNC_DELAY = 450;
 const MAX_TOASTS = 4;
 const DISTORTIONS = [
   { id: "catastrofizzazione", icon: "!", label: "Catastrofizzazione" },
@@ -174,14 +176,16 @@ const uiState = {
   gameVisualRuntime: [],
   audioContext: null,
   audioNodes: [],
-  currentOpenHomeworkId: null
+  currentOpenHomeworkId: null,
+  remoteSyncTimer: null,
+  remoteSyncPromise: null
 };
 
 let state;
 
 document.addEventListener("DOMContentLoaded", init);
 
-function init() {
+async function init() {
   cacheDom();
   state = loadState();
   uiState.draft = createEmptyDraft();
@@ -192,6 +196,7 @@ function init() {
   window.addEventListener("resize", resizeCelebrationCanvas);
   renderAll();
   startCountdown();
+  await restoreRemoteSession();
 }
 
 function cacheDom() {
@@ -343,15 +348,11 @@ function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      const fresh = createDemoState();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
-      return fresh;
+      return createDemoState();
     }
     return sanitizeState(JSON.parse(raw));
   } catch (error) {
-    const fresh = createDemoState();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
-    return fresh;
+    return createDemoState();
   }
 }
 
@@ -440,7 +441,6 @@ function sanitizeAuth(auth) {
   return {
     therapist: {
       username: normalizeUsername(auth?.therapist?.username) || "martina",
-      password: normalizePassword(auth?.therapist?.password) || "1234",
       name: String(auth?.therapist?.name || "Martina")
     }
   };
@@ -452,14 +452,14 @@ function sanitizePatient(patient) {
   }
   const username = normalizeUsername(patient.username);
   const password = normalizePassword(patient.password);
-  if (!username || !password) {
+  if (!username) {
     return null;
   }
   const sanitized = {
     id: String(patient.id || `patient-${Date.now()}`),
     name: String(patient.name || username),
     username,
-    password,
+    ...(password ? { password } : {}),
     createdAt: String(patient.createdAt || new Date().toISOString()),
     session: sanitizeSession(patient.session),
     tasks: Array.isArray(patient.tasks) ? patient.tasks.map(sanitizeTask).filter(Boolean) : [],
@@ -634,6 +634,106 @@ function sanitizeDraft(draft) {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  queueRemoteSync();
+}
+
+function saveStateLocalOnly() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function getSessionToken() {
+  return localStorage.getItem(SESSION_KEY) || "";
+}
+
+function setSessionToken(token) {
+  localStorage.setItem(SESSION_KEY, token);
+}
+
+function clearSessionToken() {
+  localStorage.removeItem(SESSION_KEY);
+}
+
+async function apiRequest(path, options = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {})
+  };
+  const token = getSessionToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const response = await fetch(path, {
+    method: options.method || "GET",
+    headers,
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || "Richiesta non riuscita.");
+  }
+  return payload;
+}
+
+function applyRemotePayload(payload) {
+  state = sanitizeState(payload.state);
+  uiState.currentRole = payload.role || uiState.currentRole;
+  uiState.currentPatientId = payload.currentPatientId || state.patients[0]?.id || null;
+  syncDraftFromPatient();
+  saveStateLocalOnly();
+  renderAll();
+  startCountdown();
+}
+
+async function restoreRemoteSession() {
+  const token = getSessionToken();
+  if (!token) {
+    return;
+  }
+  try {
+    const payload = await apiRequest("/api/session");
+    applyRemotePayload(payload);
+  } catch (error) {
+    clearSessionToken();
+    uiState.currentRole = null;
+    uiState.currentPatientId = null;
+    renderAll();
+  }
+}
+
+function queueRemoteSync() {
+  if (!uiState.currentRole || !getSessionToken()) {
+    return;
+  }
+  if (uiState.remoteSyncTimer) {
+    clearTimeout(uiState.remoteSyncTimer);
+  }
+  uiState.remoteSyncTimer = window.setTimeout(() => {
+    uiState.remoteSyncTimer = null;
+    uiState.remoteSyncPromise = syncRemoteState().catch((error) => {
+      showToast("Sincronizzazione non riuscita", error.message || "Riproveremo alla prossima modifica.");
+    });
+  }, REMOTE_SYNC_DELAY);
+}
+
+async function syncRemoteState() {
+  if (!uiState.currentRole || !getSessionToken()) {
+    return;
+  }
+  const payload = await apiRequest("/api/sync", {
+    method: "POST",
+    body: {
+      currentPatientId: uiState.currentPatientId,
+      state
+    }
+  });
+  const previousRole = uiState.currentRole;
+  const previousSection = uiState.patientSection;
+  const previousTherapistSection = uiState.therapistSection;
+  applyRemotePayload(payload);
+  uiState.currentRole = previousRole;
+  uiState.patientSection = previousSection;
+  uiState.therapistSection = previousTherapistSection;
+  switchSection(previousRole === "patient" ? "patient" : "therapist", previousRole === "patient" ? previousSection : previousTherapistSection);
 }
 
 function createEmptyDraft() {
@@ -1479,7 +1579,7 @@ function closeHomeworkDrawer() {
   uiState.currentOpenHomeworkId = null;
 }
 
-function handleLogin(event) {
+async function handleLogin(event) {
   event.preventDefault();
   const username = normalizeUsername(refs.usernameInput.value);
   const password = normalizePassword(refs.passwordInput.value);
@@ -1487,37 +1587,37 @@ function handleLogin(event) {
     refs.loginError.textContent = "Inserisci nome utente e password validi.";
     return;
   }
-
-  if (uiState.loginRole === "psicologo") {
-    if (username === state.auth.therapist.username && password === state.auth.therapist.password) {
-      uiState.currentRole = "therapist";
-      ensureSelectedPatient();
-      closeLoginModal();
-      renderAll();
-      showToast("Accesso eseguito", "Benvenuta nell'area psicologo.");
-      return;
-    }
-    refs.loginError.textContent = "Credenziali psicologo non corrette.";
-    return;
+  refs.loginError.textContent = "";
+  try {
+    const payload = await apiRequest("/api/login", {
+      method: "POST",
+      body: {
+        role: uiState.loginRole,
+        username,
+        password
+      }
+    });
+    setSessionToken(payload.token);
+    applyRemotePayload(payload);
+    closeLoginModal();
+    showToast(
+      "Accesso eseguito",
+      payload.role === "therapist"
+        ? "Benvenuta nell'area psicologo."
+        : `Bentornato, ${state.patients[0]?.name || "paziente"}.`
+    );
+  } catch (error) {
+    refs.loginError.textContent = uiState.loginRole === "psicologo"
+      ? "Credenziali psicologo non corrette."
+      : "Credenziali paziente non corrette.";
   }
-
-  const patient = state.patients.find((item) => item.username === username && item.password === password);
-  if (!patient) {
-    refs.loginError.textContent = "Credenziali paziente non corrette.";
-    return;
-  }
-  uiState.currentRole = "patient";
-  uiState.currentPatientId = patient.id;
-  syncDraftFromPatient();
-  closeLoginModal();
-  renderAll();
-  showToast("Accesso eseguito", `Bentornato, ${patient.name}.`);
 }
 
 function logout() {
   closeGameModal();
   closeHomeworkDrawer();
   stopBreathing(false);
+  clearSessionToken();
   uiState.currentRole = null;
   uiState.currentPatientId = null;
   uiState.patientSection = "patientHome";
@@ -1527,6 +1627,8 @@ function logout() {
   uiState.taskFilter = "tutte";
   uiState.progressView = "timeline";
   uiState.draft = createEmptyDraft();
+  state = createDemoState();
+  saveStateLocalOnly();
   renderAll();
 }
 
@@ -1673,15 +1775,17 @@ function handleProgressTabClick(event) {
   renderProgressViews();
 }
 
-function savePatientAccount(event) {
+async function savePatientAccount(event) {
   event.preventDefault();
   const name = refs.patientNameInput.value.trim();
   const username = normalizeUsername(refs.patientUsernameInput.value);
   const password = normalizePassword(refs.patientPasswordInput.value);
   const editId = refs.patientAccountId.value;
 
-  if (!name || !username || !password) {
-    showToast("Campi mancanti", "Inserisci nome, nome utente e password del paziente.");
+  if (!name || !username || (!editId && !password)) {
+    showToast("Campi mancanti", editId
+      ? "Inserisci nome e nome utente. La password serve solo se vuoi cambiarla."
+      : "Inserisci nome, nome utente e password del paziente.");
     return;
   }
   const duplicate = state.patients.some((item) => item.username === username && item.id !== editId);
@@ -1689,31 +1793,31 @@ function savePatientAccount(event) {
     showToast("Nome utente non disponibile", "Scegli un nome utente diverso per questo paziente.");
     return;
   }
-
-  if (editId) {
-    const patient = state.patients.find((item) => item.id === editId);
-    if (!patient) {
-      return;
-    }
-    patient.name = name;
-    patient.username = username;
-    patient.password = password;
-    showToast("Account aggiornato", "Le credenziali del paziente sono state aggiornate.");
-  } else {
-    const patient = createPatientAccount(name, username, password);
-    state.patients.unshift(patient);
-    uiState.currentPatientId = patient.id;
-    showToast("Account creato", "Il nuovo account paziente è pronto per l'accesso.");
+  try {
+    const payload = await apiRequest("/api/patients", {
+      method: editId ? "PUT" : "POST",
+      body: {
+        id: editId || undefined,
+        name,
+        username,
+        ...(password ? { password } : {})
+      }
+    });
+    applyRemotePayload(payload);
+    resetPatientAccountForm();
+    showToast(
+      editId ? "Account aggiornato" : "Account creato",
+      editId ? "Le credenziali del paziente sono state aggiornate." : "Il nuovo account paziente è pronto per l'accesso."
+    );
+  } catch (error) {
+    showToast("Operazione non riuscita", error.message || "Non è stato possibile salvare l'account.");
   }
-
-  saveState();
-  resetPatientAccountForm();
-  renderAll();
 }
 
 function resetPatientAccountForm() {
   refs.patientAccountForm.reset();
   refs.patientAccountId.value = "";
+  refs.patientPasswordInput.placeholder = "Crea una password";
 }
 
 function handlePatientAccountActions(event) {
@@ -1724,7 +1828,7 @@ function handlePatientAccountActions(event) {
   if (select) {
     uiState.currentPatientId = select.dataset.patientSelect;
     syncDraftFromPatient();
-    saveState();
+    saveStateLocalOnly();
     renderAll();
     showToast("Paziente selezionato", "La dashboard ora mostra il profilo scelto.");
   }
@@ -1737,24 +1841,22 @@ function handlePatientAccountActions(event) {
     refs.patientAccountId.value = patient.id;
     refs.patientNameInput.value = patient.name;
     refs.patientUsernameInput.value = patient.username;
-    refs.patientPasswordInput.value = patient.password;
+    refs.patientPasswordInput.value = "";
+    refs.patientPasswordInput.placeholder = "Lascia vuoto per mantenere la password attuale";
     switchSection("therapist", "therapistPatients");
   }
 
   if (remove) {
     const patientId = remove.dataset.patientDelete;
-    const patient = state.patients.find((item) => item.id === patientId);
-    state.patients = state.patients.filter((item) => item.id !== patientId);
-    if (uiState.currentPatientId === patientId) {
-      uiState.currentPatientId = state.patients[0]?.id || null;
-      syncDraftFromPatient();
-      if (uiState.currentRole === "patient") {
-        logout();
-      }
-    }
-    saveState();
-    renderAll();
-    showToast("Account eliminato", `${patient?.name || "Il paziente"} è stato rimosso da questo dispositivo.`);
+    apiRequest("/api/patients", {
+      method: "DELETE",
+      body: { id: patientId }
+    }).then((payload) => {
+      applyRemotePayload(payload);
+      showToast("Account eliminato", "Il paziente è stato rimosso dall'archivio condiviso.");
+    }).catch((error) => {
+      showToast("Eliminazione non riuscita", error.message || "Non è stato possibile eliminare il paziente.");
+    });
   }
 }
 
