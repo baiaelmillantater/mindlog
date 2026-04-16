@@ -42,8 +42,8 @@ const ACHIEVEMENTS = [
   { id: "first-game", icon: "◎", title: "Primo passo", description: "Completa il primo mini-gioco." },
   { id: "xp-100", icon: "✦", title: "Energia in crescita", description: "Raggiungi 100 XP totali." },
   { id: "xp-300", icon: "✺", title: "Ritmo costante", description: "Raggiungi 300 XP totali." },
-  { id: "streak-3", icon: "F", title: "Presenza continua", description: "Arriva a 3 giorni di streak." },
-  { id: "streak-7", icon: "FF", title: "Settimana piena", description: "Arriva a 7 giorni di streak." },
+  { id: "streak-3", icon: "F", title: "Presenza continua", description: "Arriva a 3 giorni di continuità." },
+  { id: "streak-7", icon: "FF", title: "Settimana piena", description: "Arriva a 7 giorni di continuità." },
   { id: "sheet-3", icon: "✎", title: "Voce interiore", description: "Compila 3 schede giornaliere." },
   { id: "homework-1", icon: "✓", title: "Primo homework", description: "Completa il primo homework assegnato." },
   { id: "homework-5", icon: "✓✓", title: "Costanza attiva", description: "Completa 5 homework." },
@@ -155,11 +155,14 @@ const uiState = {
   loginRole: null,
   currentPatientId: null,
   patientSection: "patientHome",
-  therapistSection: "therapistDashboard",
+  therapistSection: "therapistPatients",
   tipFilter: "Tutti",
   taskFilter: "tutte",
   gameFilter: "Tutti",
   progressView: "timeline",
+  therapistPatientSearch: "",
+  checkinStepIndex: 0,
+  patientFormOpen: false,
   selectedBreathingId: BREATHING_EXERCISES[0].id,
   countdownTimer: null,
   breathingTimer: null,
@@ -208,13 +211,14 @@ function cacheDom() {
     "patientSidebarText", "motivationText", "sessionTitle", "sessionNote", "countDays", "countHours", "countMinutes", "countSeconds", "recentEntriesList", "focusSummary",
     "sheetDateLabel", "dailySheetForm", "moodRange", "moodValue", "anxietySelect", "emotionChips", "physicalChips", "betterInput", "hardInput", "gratitude1", "gratitude2", "gratitude3", "positiveInput", "noteInput", "customQuestionsBox", "aiQuestionsBox", "advicePreview", "resetSheetButton", "draftStatus",
     "tipFilters", "tipsGrid", "breathingList", "groundingList", "breathingOrb", "breathingPhase", "breathingTitle", "breathingInstruction", "breathingCycle", "breathingTime", "startBreathingButton", "stopBreathingButton",
+    "patientGuidedFlow", "checkinPromptTitle", "checkinPromptLabel", "checkinStepCounter", "checkinProgressLabel", "checkinProgressBar", "checkinStepContent", "checkinPrevButton", "checkinNextButton", "assignedGamesList", "taskListCompact",
     "taskForm", "taskInput", "taskFilters", "taskList", "historyList", "dailyChallengeCard", "homeworkPreviewList", "gamificationSummary", "recentProgressList", "achievementGrid",
     "gameFilters", "gamesGrid", "patientHomeworkList",
-    "therapistSidebarText", "therapistStats", "moodChart", "weeklySummary", "recordList", "selectedPatientBanner",
+    "therapistSidebarText", "therapistStats", "moodChart", "weeklySummary", "recordList", "selectedPatientBanner", "patientDetailBackButton", "patientDetailIdentity", "patientManagementSummary",
     "tipForm", "tipId", "tipTitle", "tipCategory", "tipType", "tipDescription", "tipContent", "resetTipButton", "manageTipsGrid",
     "sessionForm", "sessionDateInput", "sessionTimeInput", "sessionNoteInput", "sessionPreview",
     "questionForm", "questionId", "questionText", "questionType", "questionOptions", "questionOptionsHelp", "questionActive", "resetQuestionButton", "manageQuestionsList",
-    "patientAccountForm", "patientAccountId", "patientNameInput", "patientUsernameInput", "patientPasswordInput", "resetPatientAccountButton", "patientSelectionSummary", "patientAccountsList",
+    "patientAccountForm", "patientAccountId", "patientNameInput", "patientUsernameInput", "patientPasswordInput", "resetPatientAccountButton", "patientSelectionSummary", "patientAccountsList", "patientSearchInput", "openPatientCreateButton", "patientFormPanel", "patientFormTitle",
     "therapistHomeworkGrid", "assignedHomeworkList", "progressViewTabs", "progressTimeline", "radarChart", "heatmapSummaryCards", "heatmapBoard",
     "homeworkDrawer", "closeHomeworkDrawer", "homeworkAssignForm", "drawerExerciseId", "drawerExerciseTitle", "drawerHomeworkTitle", "drawerHomeworkNote", "drawerHomeworkDueDate", "drawerPriorityPills",
     "gameModal", "closeGameModal", "gameModalLabel", "gameModalTitle", "gameModalMeta", "gameModalBody"
@@ -261,6 +265,15 @@ function bindEvents() {
   refs.logoutButton.addEventListener("click", logout);
   refs.homeShortcutButton.addEventListener("click", handleHomeShortcut);
   refs.simulateDayButton.addEventListener("click", simulateDayForTesting);
+  refs.patientDetailBackButton?.addEventListener("click", () => switchSection("therapist", "therapistPatients"));
+  refs.openPatientCreateButton?.addEventListener("click", openPatientCreateForm);
+  refs.patientSearchInput?.addEventListener("input", handlePatientSearchInput);
+  refs.checkinPrevButton?.addEventListener("click", goToPreviousCheckinStep);
+  refs.checkinNextButton?.addEventListener("click", goToNextCheckinStep);
+  refs.checkinStepContent?.addEventListener("input", handleGuidedCheckinInput);
+  refs.checkinStepContent?.addEventListener("change", handleGuidedCheckinInput);
+  refs.checkinStepContent?.addEventListener("click", handleGuidedCheckinClick);
+  refs.assignedGamesList?.addEventListener("click", handleGameCardActions);
 
   document.querySelectorAll("[data-role-area]").forEach((button) => {
     button.addEventListener("click", () => switchSection(button.dataset.roleArea, button.dataset.target));
@@ -826,21 +839,26 @@ function renderShell() {
   refs.patientScreen.classList.toggle("hidden", uiState.currentRole !== "patient");
   refs.therapistScreen.classList.toggle("hidden", uiState.currentRole !== "therapist");
   refs.patientHeaderStats.classList.toggle("hidden", uiState.currentRole !== "patient");
-  refs.simulateDayButton.classList.toggle("hidden", uiState.currentRole !== "patient");
+  refs.simulateDayButton.classList.add("hidden");
 
   if (!loggedIn) {
     return;
   }
 
   const currentPatient = getSelectedPatient();
-  const patientName = currentPatient ? ` · ${currentPatient.name}` : "";
+  const patientName = currentPatient && uiState.therapistSection === "therapistDashboard" ? ` · ${currentPatient.name}` : "";
 
   if (uiState.currentRole === "patient") {
     refs.topbarLabel.textContent = "Area paziente";
     refs.topbarTitle.textContent = sectionLabel(uiState.patientSection);
+    refs.homeShortcutButton.textContent = "Home";
+    refs.homeShortcutButton.classList.add("hidden");
   } else {
     refs.topbarLabel.textContent = "Area psicologo";
     refs.topbarTitle.textContent = `${sectionLabel(uiState.therapistSection)}${patientName}`;
+    const onList = uiState.therapistSection === "therapistPatients";
+    refs.homeShortcutButton.textContent = "Pazienti";
+    refs.homeShortcutButton.classList.toggle("hidden", onList);
   }
 
   document.querySelectorAll(".nav-link, .bottom-link").forEach((button) => {
@@ -856,80 +874,23 @@ function renderShell() {
 function renderPatientHome() {
   const patient = getSelectedPatient();
   if (!patient) {
-    refs.patientSidebarText.textContent = "Nessun profilo paziente attivo.";
-    refs.motivationText.textContent = "Quando il tuo psicologo creerà il profilo, troverai qui il tuo spazio quotidiano.";
-    refs.focusSummary.innerHTML = `<div class="empty-state">Per iniziare serve un account paziente attivo.</div>`;
-    refs.recentEntriesList.innerHTML = `<div class="empty-state">Non ci sono ancora compilazioni.</div>`;
-    refs.dailyChallengeCard.innerHTML = `<div class="empty-state">La challenge del giorno apparirà quando il profilo sarà attivo.</div>`;
-    refs.homeworkPreviewList.innerHTML = `<div class="empty-state">Qui vedrai gli homework più recenti.</div>`;
+    refs.patientSidebarText.textContent = "Quando il tuo psicologo creerà il profilo, troverai qui il percorso guidato della giornata.";
+    refs.assignedGamesList.innerHTML = `<div class="empty-state">I mini-giochi assegnati appariranno qui.</div>`;
+    refs.patientHomeworkList.innerHTML = `<div class="empty-state">Gli homework assegnati appariranno qui.</div>`;
+    refs.taskListCompact.innerHTML = "";
+    renderGuidedCheckin();
     return;
   }
 
   const entries = getEntriesDescending();
   const latest = entries[0];
-  refs.patientSidebarText.textContent = latest ? getMotivationFromEntry(latest) : "Prenditi un momento per ascoltare come stai oggi.";
-  refs.motivationText.textContent = latest ? getMotivationFromEntry(latest) : MOTIVATIONS[new Date().getDate() % MOTIVATIONS.length];
+  refs.patientSidebarText.textContent = latest
+    ? getMotivationFromEntry(latest)
+    : "Inizia dal check-in: una domanda alla volta, senza fretta.";
 
-  refs.recentEntriesList.innerHTML = entries.length
-    ? entries.slice(0, 3).map((entry) => `
-        <button class="stack-item tip-card" type="button" data-entry-open="${escapeAttribute(entry.id)}">
-          <div class="meta-row">
-            <span class="meta-pill">${escapeHtml(formatLongDate(entry.date))}</span>
-            <span class="meta-pill secondary">Umore ${entry.mood}/10</span>
-          </div>
-          <strong>${escapeHtml(makePreview(entry.hardToday || entry.betterToday || "Compilazione salvata.", 70))}</strong>
-          <span>${escapeHtml(entry.advice || "Osservazione salvata nel tuo storico.")}</span>
-        </button>
-      `).join("")
-    : `<div class="empty-state">Le tue compilazioni appariranno qui dopo il primo salvataggio.</div>`;
-
-  refs.recentEntriesList.querySelectorAll("[data-entry-open]").forEach((button) => {
-    button.addEventListener("click", () => openEntryDetail(button.dataset.entryOpen, false));
-  });
-
-  refs.focusSummary.innerHTML = latest
-    ? `
-      <p>Negli ultimi giorni emerge soprattutto <strong>${escapeHtml(getTopItems(entries.flatMap((item) => item.emotions), 1)[0] || "un bisogno di ascolto")}</strong>.</p>
-      <p>Il livello di ansia più frequente è <strong>${escapeHtml(getMostFrequent(entries.map((item) => item.anxiety)) || "non disponibile")}</strong> e il tono generale recente è <strong>${latest.mood >= 7 ? "più aperto" : latest.mood <= 4 ? "più fragile" : "in equilibrio variabile"}</strong>.</p>
-      <p>Se vuoi, puoi partire da una scheda giornaliera o da un mini-gioco per lavorare su ciò che senti adesso.</p>
-    `
-    : `<div class="empty-state">Dopo le prime compilazioni troverai qui una sintesi gentile del tuo andamento.</div>`;
-
-  const challenge = getDailyChallenge();
-  const isCompleted = patient.exerciseHistory.some((item) => item.exerciseId === challenge.id && sameDate(item.completedAt, new Date().toISOString()));
-  const progress = isCompleted ? 100 : 24;
-  refs.dailyChallengeCard.innerHTML = `
-    <div class="challenge-card">
-      <div class="meta-row">
-        <span class="meta-pill tertiary">Challenge quotidiana</span>
-        <span class="level-badge">Bonus XP doppi</span>
-      </div>
-      <h3>${escapeHtml(findGame(challenge.id).title)}</h3>
-      <p>${escapeHtml(challenge.text)}</p>
-      <div class="challenge-progress"><span style="width:${progress}%"></span></div>
-      <div class="inline-actions">
-        <button class="primary-button" type="button" data-start-game="${escapeAttribute(challenge.id)}">${isCompleted ? "Riapri" : "Inizia adesso"}</button>
-        ${isCompleted ? `<span class="status-badge completato">Completata oggi</span>` : `<span class="status-badge">Bonus attivo</span>`}
-      </div>
-    </div>
-  `;
-  refs.dailyChallengeCard.querySelector("[data-start-game]")?.addEventListener("click", (event) => {
-    openGame(event.currentTarget.dataset.startGame, { homeworkId: "" });
-  });
-
-  const activeHomework = patient.homeworks.filter((item) => item.status === "assegnato");
-  refs.homeworkPreviewList.innerHTML = activeHomework.length
-    ? activeHomework.slice(0, 3).map((homework) => `
-        <div class="homework-card">
-          <div class="meta-row">
-            <span class="priority-pill ${homework.priority.toLowerCase()}">${escapeHtml(homework.priority)}</span>
-            <span class="meta-pill">Scadenza ${escapeHtml(shortDayMonth(homework.dueDate))}</span>
-          </div>
-          <strong>${escapeHtml(homework.title)}</strong>
-          <p class="homework-note">${escapeHtml(makePreview(homework.note || "Homework assegnato dal tuo psicologo.", 90))}</p>
-        </div>
-      `).join("")
-    : `<div class="empty-state">Quando ti verrà assegnato un homework, lo troverai qui.</div>`;
+  renderGuidedCheckin();
+  renderAssignedGames();
+  renderPatientTaskSummary();
 }
 
 function renderSheet() {
@@ -943,6 +904,319 @@ function renderSheet() {
   if (!patient) {
     refs.draftStatus.innerHTML = `<strong>Profilo paziente non disponibile.</strong> Lo psicologo deve prima creare e selezionare un account.`;
   }
+}
+
+function getGuidedCheckinSteps() {
+  const steps = [
+    {
+      id: "mood",
+      title: "Umore generale",
+      description: "Parti da una valutazione semplice del tuo umore di oggi.",
+      render: () => `
+        <div class="guided-input-block">
+          <div class="guided-scale-head">
+            <span>Quanto descrive la giornata?</span>
+            <strong>${uiState.draft.mood} / 10</strong>
+          </div>
+          <input type="range" min="1" max="10" value="${uiState.draft.mood}" data-guided-field="mood">
+          <div class="range-meta">
+            <span>Molto basso</span>
+            <span>Molto buono</span>
+          </div>
+        </div>
+      `
+    },
+    {
+      id: "anxiety",
+      title: "Livello di ansia",
+      description: "Scegli il livello che senti più vicino a oggi.",
+      render: () => `
+        <div class="guided-input-block">
+          <select data-guided-field="anxiety">
+            ${["Nessuna", "Bassa", "Media", "Alta", "Molto alta"].map((item) => `<option ${uiState.draft.anxiety === item ? "selected" : ""}>${item}</option>`).join("")}
+          </select>
+        </div>
+      `
+    },
+    {
+      id: "emotions",
+      title: "Emozioni principali",
+      description: "Seleziona le emozioni che oggi si sono fatte sentire di più.",
+      render: () => `<div class="chip-wrap">${renderChipSet(EMOTIONS, uiState.draft.emotions)}</div>`
+    },
+    {
+      id: "physical",
+      title: "Sensazioni fisiche",
+      description: "Osserva se il corpo ti sta comunicando qualcosa di importante.",
+      render: () => `<div class="chip-wrap">${renderChipSet(PHYSICAL_SENSATIONS, uiState.draft.physicalSensations)}</div>`
+    },
+    {
+      id: "better",
+      title: "Cosa ti ha fatto stare meglio?",
+      description: "Anche un momento piccolo può essere utile da riconoscere.",
+      render: () => `<textarea rows="5" data-guided-field="betterToday" placeholder="Scrivi con calma cosa ti ha aiutato oggi.">${escapeHtml(uiState.draft.betterToday)}</textarea>`
+    },
+    {
+      id: "hard",
+      title: "Cosa ti ha messo più in difficoltà?",
+      description: "Dagli un nome, senza giudicarti.",
+      render: () => `<textarea rows="5" data-guided-field="hardToday" placeholder="Scrivi qui ciò che è stato più pesante o difficile.">${escapeHtml(uiState.draft.hardToday)}</textarea>`
+    },
+    {
+      id: "gratitude",
+      title: "Gratitudine",
+      description: "Se vuoi, fermati su una o più cose per cui senti gratitudine.",
+      render: () => `
+        <div class="guided-triple">
+          <input type="text" data-guided-field="gratitude-0" placeholder="Prima cosa" value="${escapeAttribute(uiState.draft.gratitude[0] || "")}">
+          <input type="text" data-guided-field="gratitude-1" placeholder="Seconda cosa" value="${escapeAttribute(uiState.draft.gratitude[1] || "")}">
+          <input type="text" data-guided-field="gratitude-2" placeholder="Terza cosa" value="${escapeAttribute(uiState.draft.gratitude[2] || "")}">
+        </div>
+      `
+    },
+    {
+      id: "positive",
+      title: "Pensiero positivo del giorno",
+      description: "Lasciati una frase utile e gentile da ritrovare più tardi.",
+      render: () => `<textarea rows="5" data-guided-field="positiveThought" placeholder="Scrivi qui un pensiero positivo del giorno.">${escapeHtml(uiState.draft.positiveThought)}</textarea>`
+    },
+    {
+      id: "note",
+      title: "Nota finale",
+      description: "Se vuoi, aggiungi una nota libera prima di concludere.",
+      render: () => `<textarea rows="5" data-guided-field="note" placeholder="Aggiungi qui una nota libera opzionale.">${escapeHtml(uiState.draft.note)}</textarea>`
+    }
+  ];
+
+  state.customQuestions.filter((item) => item.active).forEach((question) => {
+    steps.push({
+      id: `custom-${question.id}`,
+      title: question.text,
+      description: "Domanda personalizzata del tuo psicologo.",
+      render: () => renderGuidedCustomQuestion(question)
+    });
+  });
+
+  buildAiQuestions(uiState.draft).forEach((question) => {
+    steps.push({
+      id: `ai-${question.id}`,
+      title: "Approfondimento guidato",
+      description: question.question,
+      render: () => `<textarea rows="5" data-guided-ai="${escapeAttribute(question.id)}" placeholder="Scrivi qui la tua risposta.">${escapeHtml(uiState.draft.aiAnswers[question.id] || "")}</textarea>`
+    });
+  });
+
+  return steps;
+}
+
+function renderGuidedCustomQuestion(question) {
+  const answer = uiState.draft.customAnswers[question.id];
+  if (question.type === "textarea") {
+    return `<textarea rows="5" data-guided-custom="${escapeAttribute(question.id)}" placeholder="Scrivi qui la tua risposta.">${escapeHtml(answer || "")}</textarea>`;
+  }
+  if (question.type === "scelta-singola") {
+    return `
+      <div class="guided-choice-list">
+        ${question.options.map((option) => `
+          <label class="guided-choice">
+            <input type="radio" name="custom-${escapeAttribute(question.id)}" value="${escapeAttribute(option)}" data-guided-custom="${escapeAttribute(question.id)}" ${answer === option ? "checked" : ""}>
+            <span>${escapeHtml(option)}</span>
+          </label>
+        `).join("")}
+      </div>
+    `;
+  }
+  if (question.type === "scelta-multipla") {
+    const values = Array.isArray(answer) ? answer : [];
+    return `
+      <div class="guided-choice-list">
+        ${question.options.map((option) => `
+          <label class="guided-choice">
+            <input type="checkbox" value="${escapeAttribute(option)}" data-guided-custom="${escapeAttribute(question.id)}" ${values.includes(option) ? "checked" : ""}>
+            <span>${escapeHtml(option)}</span>
+          </label>
+        `).join("")}
+      </div>
+    `;
+  }
+  if (question.type === "scala") {
+    return `
+      <div class="guided-input-block">
+        <div class="guided-scale-head">
+          <span>Valore selezionato</span>
+          <strong>${Number(answer) || 5} / 10</strong>
+        </div>
+        <input type="range" min="1" max="10" value="${Number(answer) || 5}" data-guided-custom="${escapeAttribute(question.id)}">
+      </div>
+    `;
+  }
+  return `<input type="text" data-guided-custom="${escapeAttribute(question.id)}" placeholder="Scrivi qui la tua risposta." value="${escapeAttribute(answer || "")}">`;
+}
+
+function renderGuidedCheckin() {
+  const patient = getSelectedPatient();
+  uiState.gameState.aiQuestions = buildAiQuestions(uiState.draft);
+  const steps = getGuidedCheckinSteps();
+  uiState.checkinStepIndex = clamp(uiState.checkinStepIndex, 0, Math.max(steps.length - 1, 0));
+  const step = steps[uiState.checkinStepIndex];
+  if (!step || !patient) {
+    refs.checkinPromptTitle.textContent = "Compilazione guidata";
+    refs.checkinPromptLabel.textContent = "Qui vedrai il percorso giornaliero quando il profilo paziente sarà attivo.";
+    refs.checkinStepCounter.textContent = "0 / 0";
+    refs.checkinProgressLabel.textContent = "In attesa";
+    refs.checkinProgressBar.style.width = "0%";
+    refs.checkinStepContent.innerHTML = `<div class="empty-state">Il check-in guidato sarà disponibile appena il profilo sarà attivo.</div>`;
+    refs.checkinPrevButton.disabled = true;
+    refs.checkinNextButton.disabled = true;
+    refs.draftStatus.innerHTML = `<strong>Profilo non disponibile.</strong> Il tuo psicologo deve prima attivare l'account.`;
+    return;
+  }
+
+  refs.checkinPromptTitle.textContent = step.title;
+  refs.checkinPromptLabel.textContent = step.description;
+  refs.checkinStepCounter.textContent = `${uiState.checkinStepIndex + 1} / ${steps.length}`;
+  refs.checkinProgressLabel.textContent = uiState.checkinStepIndex === steps.length - 1 ? "Ultimo passaggio" : "Percorso in corso";
+  refs.checkinProgressBar.style.width = `${Math.round(((uiState.checkinStepIndex + 1) / steps.length) * 100)}%`;
+  refs.checkinStepContent.innerHTML = step.render();
+  refs.checkinPrevButton.disabled = uiState.checkinStepIndex === 0;
+  refs.checkinNextButton.textContent = uiState.checkinStepIndex === steps.length - 1 ? "Salva la scheda" : "Continua";
+  refs.draftStatus.innerHTML = isDraftMeaningful(uiState.draft)
+    ? `<strong>Bozza aggiornata.</strong> Il tuo percorso di oggi viene salvato mentre compili.`
+    : `<strong>Inizio guidato.</strong> Procedi con calma, una domanda alla volta.`;
+}
+
+function goToPreviousCheckinStep() {
+  uiState.checkinStepIndex = Math.max(0, uiState.checkinStepIndex - 1);
+  renderGuidedCheckin();
+}
+
+function goToNextCheckinStep() {
+  const steps = getGuidedCheckinSteps();
+  if (uiState.checkinStepIndex >= steps.length - 1) {
+    submitDailySheet();
+    return;
+  }
+  uiState.checkinStepIndex += 1;
+  renderGuidedCheckin();
+}
+
+function handleGuidedCheckinInput(event) {
+  const target = event.target;
+  let shouldRerender = false;
+  if (target.dataset.guidedField === "mood") {
+    uiState.draft.mood = Number(target.value);
+    shouldRerender = true;
+  } else if (target.dataset.guidedField === "anxiety") {
+    uiState.draft.anxiety = target.value;
+    shouldRerender = true;
+  } else if (target.dataset.guidedField === "betterToday") {
+    uiState.draft.betterToday = target.value;
+  } else if (target.dataset.guidedField === "hardToday") {
+    uiState.draft.hardToday = target.value;
+  } else if (target.dataset.guidedField === "positiveThought") {
+    uiState.draft.positiveThought = target.value;
+  } else if (target.dataset.guidedField === "note") {
+    uiState.draft.note = target.value;
+  } else if (target.dataset.guidedField?.startsWith("gratitude-")) {
+    const index = Number(target.dataset.guidedField.split("-")[1]);
+    uiState.draft.gratitude[index] = target.value;
+  } else if (target.dataset.guidedCustom) {
+    const id = target.dataset.guidedCustom;
+    if (target.type === "checkbox") {
+      uiState.draft.customAnswers[id] = [...refs.checkinStepContent.querySelectorAll(`[data-guided-custom="${id}"]:checked`)].map((input) => input.value);
+      shouldRerender = true;
+    } else if (target.type === "radio" || target.type === "range") {
+      uiState.draft.customAnswers[id] = target.value;
+      shouldRerender = true;
+    } else {
+      uiState.draft.customAnswers[id] = target.value;
+    }
+  } else if (target.dataset.guidedAi) {
+    uiState.draft.aiAnswers[target.dataset.guidedAi] = target.value;
+  }
+  persistDraft();
+  if (shouldRerender) {
+    renderGuidedCheckin();
+  }
+}
+
+function handleGuidedCheckinClick(event) {
+  const chip = event.target.closest("[data-chip]");
+  if (!chip) {
+    return;
+  }
+  const currentStep = getGuidedCheckinSteps()[uiState.checkinStepIndex];
+  if (!currentStep) {
+    return;
+  }
+  if (currentStep.id === "emotions") {
+    toggleChip("emotions", chip.dataset.chip);
+  }
+  if (currentStep.id === "physical") {
+    toggleChip("physicalSensations", chip.dataset.chip);
+  }
+  renderGuidedCheckin();
+}
+
+function renderAssignedGames() {
+  const patient = getSelectedPatient();
+  if (!patient) {
+    refs.assignedGamesList.innerHTML = `<div class="empty-state">I mini-giochi assegnati appariranno qui.</div>`;
+    return;
+  }
+  const assignedIds = [...new Set(patient.homeworks.map((item) => item.exerciseId))];
+  const games = assignedIds.map(findGame).filter(Boolean);
+  refs.assignedGamesList.innerHTML = games.length ? games.map((game) => `
+    <article class="game-card compact-card">
+      <div class="meta-row">
+        <span class="meta-pill">${escapeHtml(game.category)}</span>
+        <span class="meta-pill tertiary">${game.xp} XP</span>
+      </div>
+      <strong>${escapeHtml(game.title)}</strong>
+      <p>${escapeHtml(makePreview(game.description, 110))}</p>
+      <div class="tip-actions">
+        <button class="primary-button small-button" type="button" data-start-game="${escapeAttribute(game.id)}">Avvia</button>
+      </div>
+    </article>
+  `).join("") : `<div class="empty-state">Non ci sono mini-giochi assegnati in questo momento.</div>`;
+}
+
+function renderPatientTaskSummary() {
+  const patient = getSelectedPatient();
+  if (!patient || !patient.tasks.length) {
+    refs.taskListCompact.innerHTML = "";
+    return;
+  }
+  const tasks = patient.tasks.slice(0, 3);
+  refs.taskListCompact.innerHTML = `
+    <div class="compact-task-head">
+      <p class="mini-label">Attività pratiche</p>
+    </div>
+    ${tasks.map((task) => `
+      <div class="compact-task-row ${task.completed ? "completed" : ""}">
+        <span class="compact-task-bullet">${task.completed ? "✓" : "○"}</span>
+        <span>${escapeHtml(task.title)}</span>
+      </div>
+    `).join("")}
+  `;
+}
+
+function openPatientCreateForm() {
+  uiState.patientFormOpen = true;
+  refs.patientFormPanel.classList.remove("hidden");
+  refs.patientFormTitle.textContent = "Nuovo paziente";
+  resetPatientAccountForm(false);
+  refs.patientNameInput.focus();
+}
+
+function closePatientForm() {
+  uiState.patientFormOpen = false;
+  refs.patientFormPanel.classList.add("hidden");
+}
+
+function handlePatientSearchInput() {
+  uiState.therapistPatientSearch = refs.patientSearchInput.value || "";
+  renderPatients();
 }
 
 function renderDynamicSheet() {
@@ -1200,28 +1474,33 @@ function renderAchievements() {
 function renderTherapistDashboard() {
   const patient = getSelectedPatient();
   if (!patient) {
-    refs.selectedPatientBanner.innerHTML = `<strong>Nessun paziente selezionato.</strong> Crea o seleziona un profilo nella sezione Pazienti per visualizzare dati, homework e progressi.`;
-    refs.therapistSidebarText.textContent = "La dashboard si attiverà quando sarà disponibile un profilo paziente.";
+    refs.selectedPatientBanner.innerHTML = `<strong>Nessun paziente selezionato.</strong> Vai alla lista pazienti per aprire un profilo.`;
+    refs.therapistSidebarText.textContent = "Entra direttamente nella lista pazienti per cercare, creare o aprire un profilo.";
+    refs.patientDetailIdentity.textContent = "Progressi del paziente";
+    refs.patientManagementSummary.innerHTML = `<div class="empty-state">Apri un paziente per gestire sessioni, mini-giochi e homework.</div>`;
     refs.therapistStats.innerHTML = `<div class="empty-state">Ancora nessun paziente selezionato.</div>`;
     refs.weeklySummary.innerHTML = `<div class="empty-state">Le statistiche settimanali appariranno qui.</div>`;
     refs.moodChart.innerHTML = `<div class="empty-state">Il grafico si popolerà con le compilazioni del paziente selezionato.</div>`;
+    refs.recordList.innerHTML = `<div class="empty-state">Le schede compilate appariranno qui.</div>`;
     return;
   }
 
   refs.selectedPatientBanner.innerHTML = `<strong>Paziente attivo:</strong> ${escapeHtml(patient.name)} · ${escapeHtml(patient.username)}`;
-  refs.therapistSidebarText.textContent = `XP totali ${patient.stats.xp}, livello ${patient.stats.level}, streak ${patient.stats.streak} giorni.`;
+  refs.therapistSidebarText.textContent = `Apri un paziente, leggi l'andamento e assegna subito il prossimo passo terapeutico.`;
+  refs.patientDetailIdentity.textContent = patient.name;
 
   const recentEntries = entriesWithinDays(7);
   const avgMood = recentEntries.length ? (recentEntries.reduce((sum, item) => sum + item.mood, 0) / recentEntries.length).toFixed(1) : "-";
   const topAnxiety = recentEntries.length ? getMostFrequent(recentEntries.map((item) => item.anxiety)) : "Nessuna";
   const recurringEmotion = recentEntries.length ? getTopItems(recentEntries.flatMap((item) => item.emotions), 1)[0] || "Non disponibile" : "Non disponibile";
   const assigned = patient.homeworks.filter((item) => item.status === "assegnato").length;
+  const completedExercises = patient.exerciseHistory.length;
 
   refs.therapistStats.innerHTML = [
-    { label: "Schede compilate", value: patient.entries.length, note: "Totale archivio" },
-    { label: "Umore medio 7 giorni", value: avgMood, note: "Media recente" },
-    { label: "Ansia ricorrente", value: topAnxiety, note: "Livello prevalente" },
-    { label: "Homework attivi", value: assigned, note: "Da completare" }
+    { label: "Schede compilate", value: patient.entries.length, note: "Totale raccolto" },
+    { label: "Umore medio", value: avgMood, note: "Ultimi 7 giorni" },
+    { label: "Ansia ricorrente", value: topAnxiety, note: "Segnale prevalente" },
+    { label: "Esercizi completati", value: completedExercises, note: "Mini-giochi e homework" }
   ].map((item) => `
     <article class="stat-card">
       <p class="mini-label">${escapeHtml(item.label)}</p>
@@ -1231,10 +1510,14 @@ function renderTherapistDashboard() {
   `).join("");
 
   refs.weeklySummary.innerHTML = `
-    <p>Emozione ricorrente: <strong>${escapeHtml(recurringEmotion)}</strong>.</p>
-    <p>XP accumulati: <strong>${patient.stats.xp}</strong> · Livello <strong>${patient.stats.level}</strong>.</p>
-    <p>Exercise streak: <strong>${patient.stats.streak}</strong> giorni.</p>
-    <p>Homework completati: <strong>${patient.homeworks.filter((item) => item.status === "completato").length}</strong>.</p>
+    <p>L'emozione più ricorrente negli ultimi giorni è <strong>${escapeHtml(recurringEmotion)}</strong>.</p>
+    <p>Il paziente ha <strong>${assigned}</strong> attività ancora attive e <strong>${patient.homeworks.filter((item) => item.status === "completato").length}</strong> homework già completati.</p>
+    <p>XP accumulati: <strong>${patient.stats.xp}</strong> · Livello <strong>${patient.stats.level}</strong> · Streak <strong>${patient.stats.streak}</strong> giorni.</p>
+  `;
+
+  refs.patientManagementSummary.innerHTML = `
+    <p><strong>Accesso rapido:</strong> da qui puoi assegnare o rimuovere mini-giochi, aggiornare i contenuti attivi e impostare la prossima seduta.</p>
+    <p><strong>Impostazioni paziente:</strong> usa il pulsante <em>Torna ai pazienti</em> per modificare dati anagrafici, credenziali e impostazioni dell'account.</p>
   `;
 
   renderMoodChart();
@@ -1314,27 +1597,40 @@ function renderQuestions() {
 function renderPatients() {
   const patient = getSelectedPatient();
   refs.patientSelectionSummary.innerHTML = patient ? `
-    <p><strong>${escapeHtml(patient.name)}</strong></p>
-    <p>Nome utente: <strong>${escapeHtml(patient.username)}</strong></p>
-    <p>XP: <strong>${patient.stats.xp}</strong> · Livello <strong>${patient.stats.level}</strong></p>
-    <p>Homework assegnati: <strong>${patient.homeworks.length}</strong></p>
+    <p><strong>Profilo selezionato:</strong> ${escapeHtml(patient.name)}</p>
+    <p>${escapeHtml(patient.entries.length.toString())} schede · ${escapeHtml(patient.homeworks.filter((item) => item.status === "assegnato").length.toString())} attività attive · livello ${escapeHtml(patient.stats.level.toString())}</p>
   ` : `<div class="empty-state">Nessun paziente selezionato.</div>`;
 
-  refs.patientAccountsList.innerHTML = state.patients.length ? state.patients.map((item) => `
-    <article class="manage-question-card ${uiState.currentPatientId === item.id ? "selected-card" : ""}">
-      <div class="meta-row">
-        <span class="meta-pill">${escapeHtml(item.name)}</span>
-        <span class="meta-pill secondary">${escapeHtml(item.username)}</span>
-      </div>
-      <strong>Livello ${item.stats.level} · ${item.stats.xp} XP</strong>
-      <p>${escapeHtml(item.homeworks.filter((homework) => homework.status === "assegnato").length)} homework attivi · ${item.entries.length} schede salvate.</p>
-      <div class="tip-actions">
-        <button class="primary-button small-button" type="button" data-patient-select="${escapeAttribute(item.id)}">Seleziona</button>
-        <button class="ghost-button small-button" type="button" data-patient-edit="${escapeAttribute(item.id)}">Modifica</button>
-        <button class="ghost-button small-button" type="button" data-patient-delete="${escapeAttribute(item.id)}">Elimina</button>
-      </div>
-    </article>
-  `).join("") : `<div class="empty-state">Non ci sono ancora pazienti. Puoi creare il primo account con il modulo qui sopra.</div>`;
+  const search = uiState.therapistPatientSearch.trim().toLowerCase();
+  const filtered = state.patients.filter((item) => item.name.toLowerCase().includes(search));
+  refs.patientAccountsList.innerHTML = filtered.length ? filtered.map((item) => {
+    const active = uiState.currentPatientId === item.id;
+    const nextSession = formatSessionShort(item.session);
+    const info = item.entries.length
+      ? `Umore medio recente ${getAverageMood(item.entries.slice(0, 5)).toFixed(1)} · ${item.entries.length} schede`
+      : "Nessuna scheda ancora compilata";
+    return `
+      <article class="patient-row-card ${active ? "selected-card" : ""}" data-patient-open="${escapeAttribute(item.id)}">
+        <div class="patient-row-avatar">${escapeHtml(getInitials(item.name))}</div>
+        <div class="patient-row-main">
+          <div class="patient-row-head">
+            <strong>${escapeHtml(item.name)}</strong>
+            <span class="meta-pill secondary">${escapeHtml(item.username)}</span>
+          </div>
+          <p class="patient-row-info">${escapeHtml(info)}</p>
+          <div class="patient-row-meta">
+            <span class="meta-pill">Seduta ${escapeHtml(nextSession)}</span>
+            <span class="meta-pill tertiary">${item.homeworks.filter((homework) => homework.status === "assegnato").length} attivi</span>
+          </div>
+        </div>
+        <div class="patient-row-actions">
+          <button class="primary-button small-button" type="button" data-patient-select="${escapeAttribute(item.id)}">Apri</button>
+          <button class="ghost-button small-button" type="button" data-patient-edit="${escapeAttribute(item.id)}">Impostazioni</button>
+          <button class="ghost-button small-button" type="button" data-patient-delete="${escapeAttribute(item.id)}">Elimina</button>
+        </div>
+      </article>
+    `;
+  }).join("") : `<div class="empty-state">Nessun paziente corrisponde alla ricerca. Prova con un altro nome oppure crea un nuovo profilo.</div>`;
 }
 
 function renderTherapistHomework() {
@@ -1599,6 +1895,14 @@ async function handleLogin(event) {
     });
     setSessionToken(payload.token);
     applyRemotePayload(payload);
+    if (payload.role === "therapist") {
+      uiState.therapistSection = "therapistPatients";
+      switchSection("therapist", "therapistPatients");
+    } else {
+      uiState.patientSection = "patientHome";
+      uiState.checkinStepIndex = 0;
+      switchSection("patient", "patientHome");
+    }
     closeLoginModal();
     showToast(
       "Accesso eseguito",
@@ -1621,11 +1925,14 @@ function logout() {
   uiState.currentRole = null;
   uiState.currentPatientId = null;
   uiState.patientSection = "patientHome";
-  uiState.therapistSection = "therapistDashboard";
+  uiState.therapistSection = "therapistPatients";
   uiState.gameFilter = "Tutti";
   uiState.tipFilter = "Tutti";
   uiState.taskFilter = "tutte";
   uiState.progressView = "timeline";
+  uiState.therapistPatientSearch = "";
+  uiState.checkinStepIndex = 0;
+  uiState.patientFormOpen = false;
   uiState.draft = createEmptyDraft();
   state = createDemoState();
   saveStateLocalOnly();
@@ -1636,7 +1943,7 @@ function handleHomeShortcut() {
   if (uiState.currentRole === "patient") {
     switchSection("patient", "patientHome");
   } else if (uiState.currentRole === "therapist") {
-    switchSection("therapist", "therapistDashboard");
+    switchSection("therapist", "therapistPatients");
   }
 }
 
@@ -1804,7 +2111,8 @@ async function savePatientAccount(event) {
       }
     });
     applyRemotePayload(payload);
-    resetPatientAccountForm();
+    resetPatientAccountForm(false);
+    closePatientForm();
     showToast(
       editId ? "Account aggiornato" : "Account creato",
       editId ? "Le credenziali del paziente sono state aggiornate." : "Il nuovo account paziente è pronto per l'accesso."
@@ -1814,23 +2122,38 @@ async function savePatientAccount(event) {
   }
 }
 
-function resetPatientAccountForm() {
+function resetPatientAccountForm(closePanel = true) {
   refs.patientAccountForm.reset();
   refs.patientAccountId.value = "";
   refs.patientPasswordInput.placeholder = "Crea una password";
+  refs.patientFormTitle.textContent = "Nuovo paziente";
+  if (closePanel) {
+    closePatientForm();
+  }
 }
 
 function handlePatientAccountActions(event) {
+  const open = event.target.closest("[data-patient-open]");
   const select = event.target.closest("[data-patient-select]");
   const edit = event.target.closest("[data-patient-edit]");
   const remove = event.target.closest("[data-patient-delete]");
+
+  if (open && !event.target.closest("button")) {
+    uiState.currentPatientId = open.dataset.patientOpen;
+    syncDraftFromPatient();
+    saveStateLocalOnly();
+    switchSection("therapist", "therapistDashboard");
+    renderAll();
+    return;
+  }
 
   if (select) {
     uiState.currentPatientId = select.dataset.patientSelect;
     syncDraftFromPatient();
     saveStateLocalOnly();
+    switchSection("therapist", "therapistDashboard");
     renderAll();
-    showToast("Paziente selezionato", "La dashboard ora mostra il profilo scelto.");
+    showToast("Paziente aperto", "Il dettaglio ora mostra il profilo scelto.");
   }
 
   if (edit) {
@@ -1843,6 +2166,9 @@ function handlePatientAccountActions(event) {
     refs.patientUsernameInput.value = patient.username;
     refs.patientPasswordInput.value = "";
     refs.patientPasswordInput.placeholder = "Lascia vuoto per mantenere la password attuale";
+    refs.patientFormTitle.textContent = `Impostazioni di ${patient.name}`;
+    refs.patientFormPanel.classList.remove("hidden");
+    uiState.patientFormOpen = true;
     switchSection("therapist", "therapistPatients");
   }
 
@@ -2097,6 +2423,10 @@ function handleAiAnswerInput(event) {
 
 function saveDailySheet(event) {
   event.preventDefault();
+  submitDailySheet();
+}
+
+function submitDailySheet() {
   const patient = getSelectedPatient();
   if (!patient) {
     showToast("Profilo non disponibile", "Serve un account paziente attivo per salvare la scheda.");
@@ -2136,6 +2466,7 @@ function saveDailySheet(event) {
   patient.stats.achievements = computeAchievements(patient);
   patient.draft = createEmptyDraft();
   uiState.draft = createEmptyDraft();
+  uiState.checkinStepIndex = 0;
   saveCurrentPatient();
   renderAll();
   showToast("Scheda salvata", "La compilazione di oggi è stata aggiunta al tuo storico.");
@@ -2143,8 +2474,10 @@ function saveDailySheet(event) {
 
 function resetDraft(showFeedback) {
   uiState.draft = createEmptyDraft();
+  uiState.checkinStepIndex = 0;
   persistDraft();
   renderSheet();
+  renderGuidedCheckin();
   if (showFeedback) {
     showToast("Campi ripristinati", "La bozza della scheda è stata riportata allo stato iniziale.");
   }
@@ -5091,7 +5424,7 @@ function findGame(id) {
 
 function sectionLabel(id) {
   return {
-    patientHome: "Home",
+    patientHome: "Oggi",
     patientSheet: "Scheda giornaliera",
     patientTips: "Tips",
     patientGames: "Mini-giochi",
@@ -5099,7 +5432,7 @@ function sectionLabel(id) {
     patientTasks: "Attività",
     patientAchievements: "Achievement",
     patientHistory: "Storico",
-    therapistDashboard: "Dashboard psicologo",
+    therapistDashboard: "Dettaglio paziente",
     therapistPatients: "Pazienti",
     therapistHomework: "Assegnazione homework",
     therapistProgress: "Timeline progressi",
@@ -5108,6 +5441,29 @@ function sectionLabel(id) {
     therapistSession: "Impostazione seduta",
     therapistQuestions: "Schede personalizzate"
   }[id] || "MindLog";
+}
+
+function getAverageMood(entries) {
+  if (!entries.length) {
+    return 0;
+  }
+  return entries.reduce((sum, entry) => sum + Number(entry.mood || 0), 0) / entries.length;
+}
+
+function getInitials(name) {
+  return String(name || "")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((item) => item[0]?.toUpperCase() || "")
+    .join("") || "P";
+}
+
+function formatSessionShort(session) {
+  if (!session?.date) {
+    return "non impostata";
+  }
+  return `${shortDayMonth(session.date)} · ${session.time || "--:--"}`;
 }
 
 function getTipActionLabel(type) {
