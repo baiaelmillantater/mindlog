@@ -1,6 +1,8 @@
 const STORAGE_KEY = "mindlog_state_cache_v5";
 const SESSION_KEY = "mindlog_session_v1";
-const REMOTE_SYNC_DELAY = 450;
+const REMOTE_SYNC_DELAY = 1200;
+const DRAFT_REMOTE_SYNC_DELAY = 2600;
+const REMOTE_SYNC_MAX_RETRIES = 2;
 const MAX_TOASTS = 4;
 const DISTORTIONS = [
   { id: "catastrofizzazione", icon: "!", label: "Catastrofizzazione" },
@@ -181,7 +183,11 @@ const uiState = {
   audioNodes: [],
   currentOpenHomeworkId: null,
   remoteSyncTimer: null,
-  remoteSyncPromise: null
+  remoteSyncPromise: null,
+  remoteSyncInFlight: false,
+  remoteSyncPending: false,
+  remoteSyncSilent: true,
+  remoteSyncErrorCount: 0
 };
 
 let state;
@@ -645,9 +651,12 @@ function sanitizeDraft(draft) {
   };
 }
 
-function saveState() {
+function saveState(options = {}) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  queueRemoteSync();
+  if (options.remote === false) {
+    return;
+  }
+  queueRemoteSync(options);
 }
 
 function saveStateLocalOnly() {
@@ -713,19 +722,48 @@ async function restoreRemoteSession() {
   }
 }
 
-function queueRemoteSync() {
+function queueRemoteSync(options = {}) {
   if (!uiState.currentRole || !getSessionToken()) {
     return;
   }
+  const delay = Number.isFinite(options.delay) ? options.delay : REMOTE_SYNC_DELAY;
+  const silent = options.silent !== false;
   if (uiState.remoteSyncTimer) {
     clearTimeout(uiState.remoteSyncTimer);
   }
+  uiState.remoteSyncSilent = uiState.remoteSyncSilent && silent;
   uiState.remoteSyncTimer = window.setTimeout(() => {
     uiState.remoteSyncTimer = null;
-    uiState.remoteSyncPromise = syncRemoteState().catch((error) => {
-      showToast("Sincronizzazione non riuscita", error.message || "Riproveremo alla prossima modifica.");
-    });
-  }, REMOTE_SYNC_DELAY);
+    uiState.remoteSyncPromise = flushRemoteSync();
+  }, delay);
+}
+
+async function flushRemoteSync() {
+  if (!uiState.currentRole || !getSessionToken()) {
+    return;
+  }
+  if (uiState.remoteSyncInFlight) {
+    uiState.remoteSyncPending = true;
+    return uiState.remoteSyncPromise;
+  }
+  const silent = uiState.remoteSyncSilent;
+  uiState.remoteSyncSilent = true;
+  uiState.remoteSyncInFlight = true;
+  try {
+    await syncRemoteState();
+    uiState.remoteSyncErrorCount = 0;
+  } catch (error) {
+    uiState.remoteSyncErrorCount += 1;
+    if (!silent || uiState.remoteSyncErrorCount >= REMOTE_SYNC_MAX_RETRIES) {
+      showToast("Sincronizzazione non riuscita", error.message || "Riproveremo automaticamente tra poco.");
+    }
+  } finally {
+    uiState.remoteSyncInFlight = false;
+    if (uiState.remoteSyncPending) {
+      uiState.remoteSyncPending = false;
+      queueRemoteSync({ silent: true, delay: REMOTE_SYNC_DELAY });
+    }
+  }
 }
 
 async function syncRemoteState() {
@@ -3983,7 +4021,8 @@ function persistDraft() {
     return;
   }
   patient.draft = sanitizeDraft(uiState.draft);
-  saveCurrentPatient(false);
+  saveCurrentPatient(false, { remote: false });
+  queueRemoteSync({ silent: true, delay: DRAFT_REMOTE_SYNC_DELAY });
 }
 
 function syncDraftFromPatient() {
@@ -4003,8 +4042,8 @@ function isDraftMeaningful(draft) {
   );
 }
 
-function saveCurrentPatient(render = false) {
-  saveState();
+function saveCurrentPatient(render = false, options = {}) {
+  saveState(options);
   if (render) {
     renderAll();
   }

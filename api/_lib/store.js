@@ -247,6 +247,34 @@ async function githubRequest(path, options = {}) {
   return response;
 }
 
+function isGithubConflictError(error) {
+  const message = String(error instanceof Error ? error.message : error || "").toLowerCase();
+  return message.includes("github api 409") || message.includes("sha") || message.includes("is at");
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function updateRemoteState(updater, message, options = {}) {
+  const maxAttempts = Math.max(1, Number(options.maxAttempts) || 3);
+  let lastError = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const { state, sha } = await loadRemoteState();
+    const nextState = normalizeState(await updater(normalizeState(state)));
+    try {
+      return await saveRemoteState(nextState, sha, message);
+    } catch (error) {
+      lastError = error;
+      if (!isGithubConflictError(error) || attempt === maxAttempts - 1) {
+        throw error;
+      }
+      await wait(180 * (attempt + 1));
+    }
+  }
+  throw lastError || new Error("Salvataggio remoto non riuscito.");
+}
+
 function createBaseState() {
   return {
     version: 1,
@@ -585,7 +613,6 @@ export async function loginPatient(username, password) {
 }
 
 export async function createOrUpdatePatient(body) {
-  const { state, sha } = await loadRemoteState();
   const name = String(body.name || "").trim();
   const username = normalizeUsername(body.username);
   const password = normalizePassword(body.password);
@@ -593,51 +620,52 @@ export async function createOrUpdatePatient(body) {
   if (!name || !username) {
     throw new Error("Nome e nome utente sono obbligatori.");
   }
-  if (username === state.auth.therapist.username) {
-    throw new Error("Questo nome utente è riservato all'area psicologo.");
-  }
-  const duplicate = state.patients.find((patient) => patient.username === username && patient.id !== id);
-  if (duplicate) {
-    throw new Error("Esiste già un paziente con questo nome utente.");
-  }
+  const saved = await updateRemoteState((remoteState) => {
+    if (username === remoteState.auth.therapist.username) {
+      throw new Error("Questo nome utente è riservato all'area psicologo.");
+    }
+    const duplicate = remoteState.patients.find((patient) => patient.username === username && patient.id !== id);
+    if (duplicate) {
+      throw new Error("Esiste già un paziente con questo nome utente.");
+    }
 
-  if (id) {
-    const patient = state.patients.find((entry) => entry.id === id);
-    if (!patient) {
-      throw new Error("Paziente non trovato.");
+    if (id) {
+      const patient = remoteState.patients.find((entry) => entry.id === id);
+      if (!patient) {
+        throw new Error("Paziente non trovato.");
+      }
+      patient.name = name;
+      patient.username = username;
+      if (password) {
+        patient.passwordHash = hashPassword(password);
+      }
+    } else {
+      if (!password) {
+        throw new Error("La password è obbligatoria per un nuovo paziente.");
+      }
+      remoteState.patients.unshift(createPatientRecord({ name, username, password }));
     }
-    patient.name = name;
-    patient.username = username;
-    if (password) {
-      patient.passwordHash = hashPassword(password);
-    }
-  } else {
-    if (!password) {
-      throw new Error("La password è obbligatoria per un nuovo paziente.");
-    }
-    state.patients.unshift(createPatientRecord({ name, username, password }));
-  }
-
-  const saved = await saveRemoteState(state, sha, id ? "Aggiorna account paziente" : "Crea account paziente");
-  const currentPatientId = id || saved.state.patients[0]?.id || null;
+    return remoteState;
+  }, id ? "Aggiorna account paziente" : "Crea account paziente");
+  const currentPatientId = id || saved.state.patients.find((entry) => entry.username === username)?.id || saved.state.patients[0]?.id || null;
   return createTherapistPayload(saved.state, currentPatientId);
 }
 
 export async function deletePatient(patientId) {
-  const { state, sha } = await loadRemoteState();
-  const nextPatients = state.patients.filter((entry) => entry.id !== patientId);
-  if (nextPatients.length === state.patients.length) {
-    throw new Error("Paziente non trovato.");
-  }
-  state.patients = nextPatients;
-  const saved = await saveRemoteState(state, sha, "Elimina account paziente");
+  const saved = await updateRemoteState((remoteState) => {
+    const nextPatients = remoteState.patients.filter((entry) => entry.id !== patientId);
+    if (nextPatients.length === remoteState.patients.length) {
+      throw new Error("Paziente non trovato.");
+    }
+    remoteState.patients = nextPatients;
+    return remoteState;
+  }, "Elimina account paziente");
   return createTherapistPayload(saved.state, saved.state.patients[0]?.id || null);
 }
 
 export async function syncSharedState(session, clientState, currentPatientId) {
-  const { state: remoteState, sha } = await loadRemoteState();
   if (session.role === "therapist") {
-    const nextState = normalizeState({
+    const saved = await updateRemoteState((remoteState) => normalizeState({
       ...remoteState,
       tips: clientState?.tips,
       customQuestions: clientState?.customQuestions,
@@ -651,25 +679,27 @@ export async function syncSharedState(session, clientState, currentPatientId) {
             });
           }).filter(Boolean)
         : remoteState.patients
-    });
-    const saved = await saveRemoteState(nextState, sha, "Sincronizza stato MindLog");
+    }), "Sincronizza stato MindLog");
     return createTherapistPayload(saved.state, currentPatientId);
   }
 
   const patientId = session.patientId;
   const clientPatient = clientState?.patients?.find?.((entry) => entry.id === patientId) || clientState?.patients?.[0];
-  const patientIndex = remoteState.patients.findIndex((entry) => entry.id === patientId);
-  if (patientIndex < 0 || !clientPatient) {
+  if (!clientPatient) {
     throw new Error("Profilo paziente non disponibile.");
   }
-
-  remoteState.patients[patientIndex] = normalizePatient({
-    ...remoteState.patients[patientIndex],
-    ...clientPatient,
-    username: remoteState.patients[patientIndex].username,
-    passwordHash: remoteState.patients[patientIndex].passwordHash
-  });
-
-  const saved = await saveRemoteState(remoteState, sha, "Sincronizza dati paziente");
+  const saved = await updateRemoteState((remoteState) => {
+    const patientIndex = remoteState.patients.findIndex((entry) => entry.id === patientId);
+    if (patientIndex < 0) {
+      throw new Error("Profilo paziente non disponibile.");
+    }
+    remoteState.patients[patientIndex] = normalizePatient({
+      ...remoteState.patients[patientIndex],
+      ...clientPatient,
+      username: remoteState.patients[patientIndex].username,
+      passwordHash: remoteState.patients[patientIndex].passwordHash
+    });
+    return remoteState;
+  }, "Sincronizza dati paziente");
   return createPatientPayload(saved.state, patientId);
 }
