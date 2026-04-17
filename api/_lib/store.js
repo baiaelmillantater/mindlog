@@ -69,6 +69,19 @@ const DEFAULT_QUESTIONS = [
   }
 ];
 
+const GAME_LIBRARY = [
+  { id: "cognitive-restructuring", title: "Ristrutturazione Cognitiva", category: "CBT" },
+  { id: "leaves-stream", title: "Foglie sul Ruscello", category: "Mindfulness" },
+  { id: "body-scan", title: "Body Scan Animato", category: "Mindfulness" },
+  { id: "cognitive-defusion", title: "Defusione Cognitiva", category: "CBT" },
+  { id: "opposite-action", title: "Opposite Action", category: "Regolazione" },
+  { id: "tipp", title: "Skill TIPP", category: "Regolazione" },
+  { id: "breathing-studio", title: "Esercizi di Respirazione", category: "Respirazione" },
+  { id: "graded-exposure", title: "Esposizione Graduale", category: "Esposizione" },
+  { id: "pmr", title: "Rilassamento Muscolare Progressivo", category: "PMR" },
+  { id: "guided-imagery", title: "Visualizzazione Guidata", category: "Mindfulness" }
+];
+
 export function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -99,6 +112,10 @@ function normalizeUsername(value) {
 
 function normalizePassword(value) {
   return String(value || "").trim();
+}
+
+function isValidUsername(value) {
+  return /^[a-z0-9._-]{3,30}$/.test(String(value || "").trim());
 }
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
@@ -437,6 +454,128 @@ function normalizeState(raw) {
   };
 }
 
+function mergeHomeworkListsForTherapist(remoteHomeworks, incomingHomeworks) {
+  const remoteMap = new Map((Array.isArray(remoteHomeworks) ? remoteHomeworks : []).map((item) => [item.id, normalizeHomework(item)]));
+  const merged = [];
+
+  (Array.isArray(incomingHomeworks) ? incomingHomeworks : []).forEach((item) => {
+    const incoming = normalizeHomework(item);
+    if (!incoming) {
+      return;
+    }
+    const remote = remoteMap.get(incoming.id);
+    merged.push({
+      ...(remote || {}),
+      ...incoming,
+      status: remote?.status === "completato" ? "completato" : incoming.status,
+      completedAt: remote?.completedAt || incoming.completedAt || ""
+    });
+    remoteMap.delete(incoming.id);
+  });
+
+  return merged;
+}
+
+function mergeHomeworkListsForPatient(remoteHomeworks, incomingHomeworks) {
+  const incomingMap = new Map((Array.isArray(incomingHomeworks) ? incomingHomeworks : []).map((item) => [item.id, normalizeHomework(item)]));
+  return (Array.isArray(remoteHomeworks) ? remoteHomeworks : []).map((item) => {
+    const remote = normalizeHomework(item);
+    const incoming = incomingMap.get(remote.id);
+    if (!incoming) {
+      return remote;
+    }
+    return {
+      ...remote,
+      status: incoming.status === "completato" ? "completato" : remote.status,
+      completedAt: incoming.completedAt || remote.completedAt || ""
+    };
+  });
+}
+
+function mergeTherapistPatient(remotePatient, incomingPatient) {
+  const remote = normalizePatient(remotePatient);
+  const incoming = normalizePatient({
+    ...remotePatient,
+    ...incomingPatient,
+    passwordHash: remote?.passwordHash || incomingPatient?.passwordHash
+  });
+  if (!remote || !incoming) {
+    return incoming || remote;
+  }
+  return normalizePatient({
+    ...remote,
+    name: incoming.name,
+    username: incoming.username,
+    session: incoming.session,
+    homeworks: mergeHomeworkListsForTherapist(remote.homeworks, incoming.homeworks),
+    entries: remote.entries.map((entry) => {
+      const incomingEntry = incoming.entries.find((item) => item.id === entry.id);
+      return sanitizeEntry({
+        ...entry,
+        privateNote: incomingEntry?.privateNote ?? entry.privateNote ?? ""
+      });
+    }).filter(Boolean),
+    passwordHash: remote.passwordHash,
+    createdAt: remote.createdAt,
+    tasks: remote.tasks,
+    exerciseHistory: remote.exerciseHistory,
+    stats: remote.stats,
+    gameData: remote.gameData,
+    draft: remote.draft
+  });
+}
+
+function mergePatientSelfUpdate(remotePatient, incomingPatient) {
+  const remote = normalizePatient(remotePatient);
+  const incoming = normalizePatient({
+    ...remotePatient,
+    ...incomingPatient,
+    passwordHash: remote?.passwordHash || incomingPatient?.passwordHash
+  });
+  if (!remote || !incoming) {
+    return incoming || remote;
+  }
+  return normalizePatient({
+    ...remote,
+    tasks: incoming.tasks,
+    entries: incoming.entries.map((entry) => {
+      const current = remote.entries.find((item) => item.id === entry.id);
+      return sanitizeEntry({
+        ...entry,
+        privateNote: current?.privateNote || ""
+      });
+    }).filter(Boolean),
+    homeworks: mergeHomeworkListsForPatient(remote.homeworks, incoming.homeworks),
+    exerciseHistory: incoming.exerciseHistory,
+    stats: incoming.stats,
+    gameData: incoming.gameData,
+    draft: incoming.draft,
+    session: remote.session,
+    name: remote.name,
+    username: remote.username,
+    passwordHash: remote.passwordHash,
+    createdAt: remote.createdAt
+  });
+}
+
+function normalizeHomework(homework) {
+  const game = GAME_LIBRARY.find((item) => item.id === homework?.exerciseId);
+  if (!game) {
+    return null;
+  }
+  return {
+    id: String(homework.id || randomId("homework")),
+    exerciseId: game.id,
+    title: String(homework.title || game.title),
+    note: String(homework.note || ""),
+    dueDate: String(homework.dueDate || futureDateString(5)),
+    priority: ["Bassa", "Media", "Alta"].includes(homework.priority) ? homework.priority : "Media",
+    status: ["assegnato", "completato"].includes(homework.status) ? homework.status : "assegnato",
+    assignedAt: String(homework.assignedAt || nowIso()),
+    completedAt: homework.completedAt ? String(homework.completedAt) : ""
+  };
+}
+
 function stripSecretsFromPatient(patient) {
   const { passwordHash, ...safePatient } = patient;
   return safePatient;
@@ -620,6 +759,12 @@ export async function createOrUpdatePatient(body) {
   if (!name || !username) {
     throw new Error("Nome e nome utente sono obbligatori.");
   }
+  if (!isValidUsername(username)) {
+    throw new Error("Il nome utente deve avere 3-30 caratteri e può contenere solo lettere minuscole, numeri, punto, trattino o underscore.");
+  }
+  if (password && password.length < 4) {
+    throw new Error("La password deve contenere almeno 4 caratteri.");
+  }
   const saved = await updateRemoteState((remoteState) => {
     if (username === remoteState.auth.therapist.username) {
       throw new Error("Questo nome utente è riservato all'area psicologo.");
@@ -665,21 +810,23 @@ export async function deletePatient(patientId) {
 
 export async function syncSharedState(session, clientState, currentPatientId) {
   if (session.role === "therapist") {
-    const saved = await updateRemoteState((remoteState) => normalizeState({
-      ...remoteState,
-      tips: clientState?.tips,
-      customQuestions: clientState?.customQuestions,
-      patients: Array.isArray(clientState?.patients)
-        ? clientState.patients.map((patient) => {
-            const current = remoteState.patients.find((entry) => entry.id === patient.id || entry.username === normalizeUsername(patient.username));
-            return normalizePatient({
-              ...current,
-              ...patient,
-              passwordHash: current?.passwordHash
-            });
-          }).filter(Boolean)
-        : remoteState.patients
-    }), "Sincronizza stato MindLog");
+    const saved = await updateRemoteState((remoteState) => {
+      const nextState = normalizeState(remoteState);
+      nextState.tips = normalizeTips(clientState?.tips);
+      nextState.customQuestions = normalizeQuestions(clientState?.customQuestions);
+      if (Array.isArray(clientState?.patients)) {
+        const mergedPatients = clientState.patients.map((patient) => {
+          const current = nextState.patients.find((entry) => entry.id === patient.id || entry.username === normalizeUsername(patient.username));
+          return mergeTherapistPatient(current, patient);
+        }).filter(Boolean);
+        const knownIds = new Set(mergedPatients.map((patient) => patient.id));
+        nextState.patients = [
+          ...mergedPatients,
+          ...nextState.patients.filter((patient) => !knownIds.has(patient.id))
+        ];
+      }
+      return nextState;
+    }, "Sincronizza stato MindLog");
     return createTherapistPayload(saved.state, currentPatientId);
   }
 
@@ -689,17 +836,13 @@ export async function syncSharedState(session, clientState, currentPatientId) {
     throw new Error("Profilo paziente non disponibile.");
   }
   const saved = await updateRemoteState((remoteState) => {
-    const patientIndex = remoteState.patients.findIndex((entry) => entry.id === patientId);
+    const nextState = normalizeState(remoteState);
+    const patientIndex = nextState.patients.findIndex((entry) => entry.id === patientId);
     if (patientIndex < 0) {
       throw new Error("Profilo paziente non disponibile.");
     }
-    remoteState.patients[patientIndex] = normalizePatient({
-      ...remoteState.patients[patientIndex],
-      ...clientPatient,
-      username: remoteState.patients[patientIndex].username,
-      passwordHash: remoteState.patients[patientIndex].passwordHash
-    });
-    return remoteState;
+    nextState.patients[patientIndex] = mergePatientSelfUpdate(nextState.patients[patientIndex], clientPatient);
+    return nextState;
   }, "Sincronizza dati paziente");
   return createPatientPayload(saved.state, patientId);
 }

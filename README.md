@@ -38,3 +38,32 @@ L'app online sincronizza i dati tra dispositivi.
 - Se imposti `DATABASE_URL`, MindLog usa Postgres come storage principale.
 - Se `DATABASE_URL` non è presente, usa il fallback remoto cifrato su GitHub.
 - Il `localStorage` resta solo come cache locale di supporto al frontend.
+
+## Smoke test rapido
+
+Per eseguire un controllo automatico dei flussi principali contro l'app online:
+
+```bash
+python3 smoke_test.py
+```
+
+Il test verifica:
+
+- health check
+- login psicologo
+- creazione paziente
+- login paziente
+- sincronizzazione dati paziente -> psicologo
+- sync concorrenti
+- eliminazione paziente
+- invalidazione della sessione del paziente eliminato
+
+## Assetto produzione consigliato
+
+Per un lancio più solido possibile:
+
+1. installa un database Postgres dal Marketplace Vercel, ad esempio Neon o Supabase
+2. verifica che Vercel aggiunga `DATABASE_URL` al progetto
+3. ridistribuisci l'app
+
+Senza `DATABASE_URL`, MindLog resta funzionante e sincronizzato, ma usa un archivio remoto cifrato su GitHub come fallback operativo.

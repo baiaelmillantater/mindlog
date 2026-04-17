@@ -12,6 +12,10 @@ export default {
       ? createTherapistPayload(state)
       : createPatientPayload(state, session.patientId);
 
+    if (session.role === "patient" && !payload.currentPatientId) {
+      return error("Questo account paziente non è più disponibile.", 401);
+    }
+
     return json(payload);
   }
 };
