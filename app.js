@@ -388,7 +388,7 @@ function bindEvents() {
   refs.resetPatientAccountButton.addEventListener("click", resetPatientAccountForm);
   refs.patientAccountsList.addEventListener("click", handlePatientAccountActions);
 
-  refs.gameFilters.addEventListener("click", handleGameFilterClick);
+  refs.gameFilters?.addEventListener("click", handleGameFilterClick);
   refs.gamesGrid.addEventListener("click", handleGameCardActions);
   refs.patientHomeworkList.addEventListener("click", handlePatientHomeworkActions);
   refs.therapistHomeworkGrid.addEventListener("click", handleTherapistHomeworkCardClick);
@@ -1270,6 +1270,9 @@ function handleGuidedCheckinClick(event) {
 }
 
 function renderAssignedGames() {
+  if (!refs.assignedGamesList) {
+    return;
+  }
   const patient = getSelectedPatient();
   if (!patient) {
     refs.assignedGamesList.innerHTML = `<div class="empty-state">I mini-giochi assegnati appariranno qui.</div>`;
@@ -1293,6 +1296,9 @@ function renderAssignedGames() {
 }
 
 function renderPatientTaskSummary() {
+  if (!refs.taskListCompact) {
+    return;
+  }
   const patient = getSelectedPatient();
   if (!patient || !patient.tasks.length) {
     refs.taskListCompact.innerHTML = "";
@@ -1432,7 +1438,9 @@ function renderTasks() {
   const patient = getSelectedPatient();
   if (!patient) {
     refs.taskList.innerHTML = `<div class="empty-state">Crea prima un profilo paziente per usare le attività.</div>`;
-    refs.taskFilters.innerHTML = "";
+    if (refs.taskFilters) {
+      refs.taskFilters.innerHTML = "";
+    }
     return;
   }
   if (refs.taskFilters) {
