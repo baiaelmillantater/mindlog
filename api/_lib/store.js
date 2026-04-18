@@ -327,7 +327,7 @@ function createPatientRecord({ name, username, password }) {
     session: {
       date: futureDateString(7),
       time: "18:30",
-      note: "Nessuna nota aggiunta."
+      note: ""
     },
     tasks: [
       createTask("Fare una passeggiata di 10 minuti"),
@@ -338,6 +338,10 @@ function createPatientRecord({ name, username, password }) {
     ],
     entries: [],
     homeworks: [],
+    assignedTipIds: [],
+    assignedQuestionIds: [],
+    checkinEnabled: true,
+    journal: [],
     exerciseHistory: [],
     stats: {
       xp: 0,
@@ -365,6 +369,18 @@ function createEmptyDraft() {
     note: "",
     customAnswers: {},
     aiAnswers: {}
+  };
+}
+
+function normalizeJournalEntry(entry) {
+  if (!entry || typeof entry !== "object") return null;
+  const body = String(entry.body || "").trim();
+  if (!body) return null;
+  return {
+    id: String(entry.id || randomId("journal")),
+    title: String(entry.title || "Pensiero del giorno").trim() || "Pensiero del giorno",
+    body,
+    createdAt: String(entry.createdAt || nowIso())
   };
 }
 
@@ -409,15 +425,19 @@ function normalizePatient(patient) {
     session: patient.session && typeof patient.session === "object" ? {
       date: String(patient.session.date || futureDateString(7)),
       time: String(patient.session.time || "18:30"),
-      note: String(patient.session.note || "Nessuna nota aggiunta.")
+      note: String(patient.session.note || "")
     } : {
       date: futureDateString(7),
       time: "18:30",
-      note: "Nessuna nota aggiunta."
+      note: ""
     },
     tasks: Array.isArray(patient.tasks) ? patient.tasks : [],
     entries: Array.isArray(patient.entries) ? patient.entries : [],
     homeworks: Array.isArray(patient.homeworks) ? patient.homeworks : [],
+    assignedTipIds: Array.isArray(patient.assignedTipIds) ? patient.assignedTipIds.map(String) : [],
+    assignedQuestionIds: Array.isArray(patient.assignedQuestionIds) ? patient.assignedQuestionIds.map(String) : [],
+    checkinEnabled: patient.checkinEnabled !== false,
+    journal: Array.isArray(patient.journal) ? patient.journal.map(normalizeJournalEntry).filter(Boolean) : [],
     exerciseHistory: Array.isArray(patient.exerciseHistory) ? patient.exerciseHistory : [],
     stats: patient.stats && typeof patient.stats === "object" ? {
       xp: Number(patient.stats.xp) || 0,
@@ -508,6 +528,10 @@ function mergeTherapistPatient(remotePatient, incomingPatient) {
     username: incoming.username,
     session: incoming.session,
     homeworks: mergeHomeworkListsForTherapist(remote.homeworks, incoming.homeworks),
+    assignedTipIds: incoming.assignedTipIds,
+    assignedQuestionIds: incoming.assignedQuestionIds,
+    checkinEnabled: incoming.checkinEnabled,
+    journal: remote.journal,
     entries: remote.entries.map((entry) => {
       const incomingEntry = incoming.entries.find((item) => item.id === entry.id);
       return sanitizeEntry({
@@ -546,6 +570,10 @@ function mergePatientSelfUpdate(remotePatient, incomingPatient) {
       });
     }).filter(Boolean),
     homeworks: mergeHomeworkListsForPatient(remote.homeworks, incoming.homeworks),
+    assignedTipIds: remote.assignedTipIds,
+    assignedQuestionIds: remote.assignedQuestionIds,
+    checkinEnabled: remote.checkinEnabled,
+    journal: incoming.journal,
     exerciseHistory: incoming.exerciseHistory,
     stats: incoming.stats,
     gameData: incoming.gameData,

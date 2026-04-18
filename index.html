@@ -18,25 +18,9 @@
 
     <header class="topbar hidden" id="topbar">
       <div class="topbar-copy">
+        <button class="menu-toggle" id="mainMenuButton" type="button" aria-label="Apri menu">☰</button>
         <p class="topbar-label" id="topbarLabel">Area paziente</p>
         <h1 id="topbarTitle">MindLog</h1>
-      </div>
-
-      <div class="topbar-stats hidden" id="patientHeaderStats">
-        <div class="xp-widget">
-          <div class="xp-meta">
-            <strong id="xpLevelLabel">Livello 1</strong>
-            <span id="xpText">0 / 100 XP</span>
-          </div>
-          <div class="xp-bar">
-            <div class="xp-fill" id="xpFill"></div>
-          </div>
-        </div>
-        <div class="streak-pill">
-          <span class="streak-flame">F</span>
-          <strong id="streakValue">0</strong>
-          <span>serie</span>
-        </div>
       </div>
 
       <div class="topbar-actions">
@@ -101,19 +85,14 @@
               </div>
             </div>
 
-            <div class="sidebar-note soft-panel">
-              <p class="mini-label">Percorso guidato</p>
-              <p id="patientSidebarText"></p>
-            </div>
           </aside>
 
           <div class="content-stack">
             <section class="view-panel active" id="patientHome">
               <div class="section-header">
                 <div>
-                  <span class="section-chip">Il tuo spazio di oggi</span>
-                  <h2>Un passo alla volta</h2>
-                  <p class="section-text">Trovi subito il conto alla prossima seduta, il check-in guidato e le attività assegnate.</p>
+                  <h2 id="dailyMotivationTitle">Una frase per oggi</h2>
+                  <p class="daily-motivation-hero" id="motivationText"></p>
                 </div>
               </div>
 
@@ -123,9 +102,8 @@
                     <p class="mini-label">Prossima seduta</p>
                     <h3 id="sessionTitle">In arrivo</h3>
                   </div>
-                  <p class="small-note" id="sessionNote"></p>
                 </div>
-                <div class="countdown-grid">
+                <div class="countdown-inline">
                   <div class="countdown-cell">
                     <strong id="countDays">00</strong>
                     <span>Giorni</span>
@@ -145,10 +123,19 @@
                 </div>
               </div>
 
-              <div class="app-card reveal guided-checkin-card" data-delay="80" id="patientGuidedFlow">
+              <div class="app-card reveal home-action-card" data-delay="70">
+                <div class="panel-heading">
+                  <div>
+                    <p class="mini-label">Check-in quotidiano</p>
+                    <h3>Compila il check-in di oggi</h3>
+                  </div>
+                  <button class="primary-button" id="openGuidedCheckinButton" type="button">Apri</button>
+                </div>
+              </div>
+
+              <div class="app-card reveal guided-checkin-card hidden" data-delay="80" id="patientGuidedFlow">
                 <div class="guided-checkin-head">
                   <div>
-                    <span class="section-chip">Check-in quotidiano</span>
                     <h3 id="checkinPromptTitle">Compilazione guidata</h3>
                     <p class="section-text" id="checkinPromptLabel">Vedrai una sola domanda alla volta per restare concentrato su ciò che conta adesso.</p>
                   </div>
@@ -166,27 +153,23 @@
                 </div>
               </div>
 
-              <div class="patient-home-sections">
-                <div class="app-card reveal" data-delay="120">
-                  <div class="panel-heading">
-                    <div>
-                      <p class="mini-label">Mini-giochi assegnati</p>
-                      <h3>Attività da iniziare o riprendere</h3>
-                    </div>
-                  </div>
-                  <div class="games-grid compact-grid" id="assignedGamesList"></div>
-                </div>
-
-                <div class="app-card reveal" data-delay="160">
-                  <div class="panel-heading">
-                    <div>
-                      <p class="mini-label">Compiti e attività</p>
-                      <h3>Cosa fare adesso</h3>
-                    </div>
-                  </div>
-                  <div class="homework-grid" id="patientHomeworkList"></div>
-                  <div class="simple-task-list" id="taskListCompact"></div>
-                </div>
+              <div class="patient-home-actions">
+                <button class="patient-link-card app-card reveal" data-delay="100" type="button" data-open-patient-view="patientGames">
+                  <p class="mini-label">Minigame</p>
+                  <strong>Mini-giochi e attività assegnate</strong>
+                </button>
+                <button class="patient-link-card app-card reveal" data-delay="120" type="button" data-open-patient-view="patientTips">
+                  <p class="mini-label">Tips</p>
+                  <strong>Contenuti assegnati dal tuo psicologo</strong>
+                </button>
+                <button class="patient-link-card app-card reveal" data-delay="140" type="button" data-open-patient-view="patientJournal">
+                  <p class="mini-label">Diario personale</p>
+                  <strong>Scrivi liberamente quello che vuoi</strong>
+                </button>
+                <button class="patient-link-card app-card reveal" data-delay="160" type="button" data-open-patient-view="patientTasks">
+                  <p class="mini-label">Attività giornaliere</p>
+                  <strong>Apri la tua lista di cose da fare</strong>
+                </button>
               </div>
             </section>
 
@@ -324,8 +307,7 @@
               <div class="section-header">
                 <div>
                   <span class="section-chip">Tips</span>
-                  <h2>Contenuti di supporto</h2>
-                  <p class="section-text">Materiali selezionati dallo psicologo per accompagnarti nel quotidiano.</p>
+                  <h2>Tips</h2>
                 </div>
               </div>
 
@@ -375,13 +357,33 @@
             <section class="view-panel hidden" id="patientGames">
               <div class="section-header">
                 <div>
-                  <span class="section-chip">Mini-giochi terapeutici</span>
-                  <h2>Allenamenti interattivi</h2>
-                  <p class="section-text">Ogni esercizio è pensato come una pratica guidata, concreta, visiva e coinvolgente.</p>
+                  <span class="section-chip">Minigame</span>
+                  <h2>Minigame</h2>
                 </div>
               </div>
-              <div class="filter-row app-card reveal" id="gameFilters"></div>
+              <div class="homework-grid" id="patientHomeworkList"></div>
               <div class="games-grid" id="gamesGrid"></div>
+            </section>
+
+            <section class="view-panel hidden" id="patientJournal">
+              <div class="section-header">
+                <div>
+                  <span class="section-chip">Diario personale</span>
+                  <h2>Diario personale</h2>
+                </div>
+              </div>
+
+              <div class="app-card reveal">
+                <form class="journal-form" id="journalForm">
+                  <input id="journalTitleInput" type="text" maxlength="120" placeholder="Titolo del pensiero di oggi">
+                  <textarea id="journalBodyInput" rows="8" placeholder="Scrivi liberamente quello che vuoi lasciare di questa giornata."></textarea>
+                  <div class="inline-actions">
+                    <button class="primary-button" type="submit">Salva nel diario</button>
+                  </div>
+                </form>
+              </div>
+
+              <div class="history-list" id="journalList"></div>
             </section>
 
             <section class="view-panel hidden" id="patientHomework">
@@ -398,18 +400,15 @@
             <section class="view-panel hidden" id="patientTasks">
               <div class="section-header">
                 <div>
-                  <span class="section-chip">Lista attività</span>
-                  <h2>Le tue attività</h2>
-                  <p class="section-text">Azioni piccole e concrete per dare continuità alla giornata.</p>
+                  <h2>Attività giornaliere</h2>
                 </div>
               </div>
 
               <div class="app-card reveal">
                 <form class="task-form" id="taskForm">
-                  <input id="taskInput" type="text" maxlength="120" placeholder="Aggiungi una nuova attività utile per oggi" aria-label="Nuova attività">
-                  <button class="primary-button" type="submit">Aggiungi attività</button>
+                  <input id="taskInput" type="text" maxlength="120" placeholder="Aggiungi una nuova attività" aria-label="Nuova attività">
+                  <button class="primary-button plus-button" type="submit">+</button>
                 </form>
-                <div class="filter-row compact-top" id="taskFilters"></div>
               </div>
 
               <div class="task-list" id="taskList"></div>
@@ -487,12 +486,12 @@
                 <div>
                   <span class="section-chip">Dettaglio paziente</span>
                   <h2>Report e gestione terapeutica</h2>
-                  <p class="section-text">Qui trovi andamento, risultati, strumenti assegnati e prossima seduta del paziente selezionato.</p>
                 </div>
-                <button class="ghost-button" id="patientDetailBackButton" type="button">Torna ai pazienti</button>
+                <div class="detail-header-actions">
+                  <button class="icon-button" id="patientDetailBackButton" type="button" aria-label="Torna ai pazienti">←</button>
+                  <button class="menu-toggle" id="therapistPatientMenuButton" type="button" aria-label="Apri menu paziente">☰</button>
+                </div>
               </div>
-
-              <div class="inline-banner reveal" data-delay="20" id="selectedPatientBanner" aria-live="polite"></div>
 
               <div class="therapist-detail-layout">
                 <div class="therapist-main-column">
@@ -500,11 +499,15 @@
                     <div class="panel-heading">
                       <div>
                         <p class="mini-label">Area report</p>
-                        <h3 id="patientDetailIdentity">Progressi del paziente</h3>
+                        <h3>Monitoraggio</h3>
                       </div>
+                      <div class="session-topline" id="sessionTopline"></div>
                     </div>
                     <div class="stats-grid" id="therapistStats"></div>
                     <div class="therapist-summary-block" id="weeklySummary"></div>
+                    <div class="report-inline-actions">
+                      <button class="ghost-button small-button" id="openPatientJournalButton" type="button">Diario personale</button>
+                    </div>
                   </div>
 
                   <div class="app-card reveal" data-delay="70">
@@ -532,48 +535,52 @@
                   <div class="app-card reveal" data-delay="60">
                     <div class="panel-heading">
                       <div>
-                        <p class="mini-label">Area terapeutica</p>
-                        <h3>Sessione e contenuti assegnati</h3>
+                        <p class="mini-label">Gestione terapeutica</p>
+                        <h3>Assegnazioni</h3>
                       </div>
                     </div>
                     <div class="therapist-management-note" id="patientManagementSummary"></div>
-                    <form class="editor-grid compact-editor" id="sessionForm">
-                      <div class="field-block">
-                        <span>Data della prossima seduta</span>
-                        <input id="sessionDateInput" type="date">
-                      </div>
-                      <div class="field-block">
-                        <span>Ora della seduta</span>
-                        <input id="sessionTimeInput" type="time">
-                      </div>
-                      <div class="field-block full-span">
-                        <span>Nota breve</span>
-                        <textarea id="sessionNoteInput" rows="3" placeholder="Aggiungi una nota breve per il paziente."></textarea>
-                      </div>
-                      <div class="inline-actions full-span">
-                        <button class="primary-button" type="submit">Salva seduta</button>
-                      </div>
+                    <form class="session-inline-form" id="sessionForm">
+                      <input id="sessionDateInput" type="date">
+                      <input id="sessionTimeInput" type="time">
+                      <button class="primary-button" type="submit">Salva seduta</button>
                     </form>
                     <div class="stats-copy compact-top" id="sessionPreview"></div>
+                    <div class="assignment-button-grid">
+                      <button class="ghost-button" id="assignCheckinButton" type="button">Check-in giornaliero</button>
+                      <button class="ghost-button" id="assignTipsButton" type="button">Tips</button>
+                      <button class="ghost-button" id="assignMinigameButton" type="button">Minigame</button>
+                    </div>
                   </div>
 
-                  <div class="app-card reveal" data-delay="90">
+                  <div class="app-card reveal assignment-card" data-delay="90">
                     <div class="panel-heading">
                       <div>
-                        <p class="mini-label">Mini-giochi e attività</p>
-                        <h3>Assegna strumenti</h3>
+                        <p class="mini-label">Assegnazione Check-in</p>
+                        <h3>Domande del paziente</h3>
+                      </div>
+                    </div>
+                    <div class="assignment-list" id="patientCheckinAssignmentList"></div>
+                  </div>
+
+                  <div class="app-card reveal assignment-card" data-delay="120">
+                    <div class="panel-heading">
+                      <div>
+                        <p class="mini-label">Assegnazione Tips</p>
+                        <h3>Tips del paziente</h3>
+                      </div>
+                    </div>
+                    <div class="assignment-list" id="patientTipAssignmentList"></div>
+                  </div>
+
+                  <div class="app-card reveal assignment-card" data-delay="140">
+                    <div class="panel-heading">
+                      <div>
+                        <p class="mini-label">Assegnazione Minigame</p>
+                        <h3>Minigame del paziente</h3>
                       </div>
                     </div>
                     <div class="homework-assign-grid compact-grid" id="therapistHomeworkGrid"></div>
-                  </div>
-
-                  <div class="app-card reveal" data-delay="120">
-                    <div class="panel-heading">
-                      <div>
-                        <p class="mini-label">Contenuti attivi</p>
-                        <h3>Da modificare o rimuovere</h3>
-                      </div>
-                    </div>
                     <div class="homework-grid" id="assignedHomeworkList"></div>
                   </div>
                 </div>
@@ -583,9 +590,7 @@
             <section class="view-panel hidden" id="therapistPatients">
               <div class="section-header">
                 <div>
-                  <span class="section-chip">Pazienti</span>
                   <h2>Gestione pazienti</h2>
-                  <p class="section-text">Entra e lavora subito sui pazienti: cerca un nome, apri il profilo o crea un nuovo accesso.</p>
                 </div>
               </div>
 
@@ -626,12 +631,6 @@
               </div>
 
               <div class="app-card reveal" data-delay="80">
-                <div class="panel-heading">
-                  <div>
-                    <p class="mini-label">Elenco pazienti</p>
-                    <h3>I tuoi pazienti</h3>
-                  </div>
-                </div>
                 <div class="stats-copy compact-bottom" id="patientSelectionSummary"></div>
                 <div class="question-manage-list therapist-patient-list" id="patientAccountsList"></div>
               </div>
@@ -870,6 +869,37 @@
         <div class="priority-pills" id="drawerPriorityPills"></div>
         <button class="primary-button" type="submit">Assegna</button>
       </form>
+    </div>
+  </aside>
+
+  <aside class="side-menu hidden" id="patientNavDrawer" aria-hidden="true">
+    <div class="side-menu-panel">
+      <div class="panel-heading">
+        <h2>Menu</h2>
+        <button class="ghost-button small-button" id="closePatientNavDrawer" type="button">Chiudi</button>
+      </div>
+      <div class="side-menu-links">
+        <button type="button" data-menu-target="patientHome">Home</button>
+        <button type="button" data-menu-target="patientSheet">Check-in quotidiano</button>
+        <button type="button" data-menu-target="patientTips">Tips</button>
+        <button type="button" data-menu-target="patientTasks">Attività giornaliere</button>
+        <button type="button" data-menu-target="patientJournal">Diario personale</button>
+        <button type="button" data-menu-target="patientGames">Minigame</button>
+      </div>
+    </div>
+  </aside>
+
+  <aside class="side-menu hidden" id="therapistPatientDrawer" aria-hidden="true">
+    <div class="side-menu-panel">
+      <div class="panel-heading">
+        <h2>Gestione paziente</h2>
+        <button class="ghost-button small-button" id="closeTherapistPatientDrawer" type="button">Chiudi</button>
+      </div>
+      <div class="side-menu-links">
+        <button type="button" data-therapist-jump="checkin">Check-in giornaliero</button>
+        <button type="button" data-therapist-jump="tips">Tips</button>
+        <button type="button" data-therapist-jump="minigame">Minigame</button>
+      </div>
     </div>
   </aside>
 

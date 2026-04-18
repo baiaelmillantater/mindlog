@@ -387,6 +387,16 @@ h4 {
   backdrop-filter: blur(18px);
 }
 
+.topbar-copy {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.menu-toggle {
+  flex: 0 0 auto;
+}
+
 .topbar-stats {
   display: flex;
   align-items: center;
@@ -650,12 +660,19 @@ h4 {
   gap: 14px;
 }
 
+.countdown-inline {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .session-panel-prominent {
   padding: 28px;
 }
 
 .countdown-cell {
-  padding: 18px 14px;
+  padding: 14px 10px;
   border-radius: 24px;
   text-align: center;
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(244, 248, 255, 0.94));
@@ -671,6 +688,45 @@ h4 {
 .countdown-cell span {
   color: var(--text-dim);
   font-size: 0.84rem;
+}
+
+.daily-motivation-hero {
+  max-width: 880px;
+  margin-top: 10px;
+  font-family: var(--font-title);
+  font-size: clamp(1.55rem, 4.3vw, 2.7rem);
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+  color: var(--ink);
+}
+
+.home-action-card {
+  padding: 24px;
+}
+
+.patient-home-actions {
+  display: grid;
+  gap: 14px;
+}
+
+.patient-link-card {
+  width: 100%;
+  padding: 20px 22px;
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  border: 1px solid rgba(82, 116, 204, 0.08);
+  transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+}
+
+.patient-link-card strong {
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+
+.patient-link-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 20px 44px rgba(125, 161, 243, 0.16);
 }
 
 .quick-actions {
@@ -821,7 +877,7 @@ h4 {
 
 .patient-row-card {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
   align-items: center;
   padding: 18px;
@@ -861,11 +917,105 @@ h4 {
   margin-top: 16px;
 }
 
+.session-topline {
+  margin-left: auto;
+  align-self: center;
+  color: var(--ink-soft);
+  font-weight: 700;
+  text-align: right;
+}
+
 .therapist-summary-block,
 .therapist-management-note {
   display: grid;
   gap: 12px;
   color: var(--ink-soft);
+}
+
+.detail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.session-inline-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.assignment-button-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.assignment-button-grid .ghost-button.active {
+  background: linear-gradient(135deg, rgba(73, 219, 241, 0.18), rgba(246, 214, 255, 0.22));
+  border-color: rgba(73, 219, 241, 0.28);
+  color: var(--ink);
+}
+
+.assignment-list {
+  display: grid;
+  gap: 10px;
+}
+
+.assignment-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(20, 44, 56, 0.08);
+  color: var(--ink);
+}
+
+.assignment-toggle-row input {
+  width: auto;
+}
+
+.report-inline-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 12px;
+}
+
+.side-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 75;
+  display: grid;
+  align-items: start;
+  justify-content: start;
+  background: rgba(122, 145, 201, 0.18);
+  backdrop-filter: blur(8px);
+}
+
+.side-menu-panel {
+  width: min(340px, calc(100vw - 24px));
+  min-height: 100vh;
+  padding: 22px 18px;
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 249, 255, 0.98));
+  border-right: 1px solid rgba(82, 116, 204, 0.08);
+  box-shadow: 0 24px 64px rgba(65, 100, 175, 0.16);
+  animation: slideInLeft 260ms ease;
+}
+
+.side-menu-links {
+  display: grid;
+  gap: 10px;
+}
+
+.side-menu-links button {
+  width: 100%;
+  text-align: left;
 }
 
 .compact-editor {
@@ -2078,6 +2228,11 @@ input[type="range"] {
   to { transform: translateX(0); opacity: 1; }
 }
 
+@keyframes slideInLeft {
+  from { transform: translateX(-24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
 @keyframes homeworkFly {
   from { transform: translateY(0) scale(1); opacity: 1; }
   to { transform: translateY(-80px) scale(0.7); opacity: 0; }
@@ -2122,6 +2277,10 @@ input[type="range"] {
     flex-wrap: wrap;
   }
 
+  .topbar-copy {
+    width: 100%;
+  }
+
   .topbar-stats {
     min-width: 100%;
     order: 3;
@@ -2158,6 +2317,7 @@ input[type="range"] {
   .homework-assign-grid,
   .quick-actions,
   .countdown-grid,
+  .countdown-inline,
   .distortion-grid,
   .scenario-grid,
   .tipp-grid {
@@ -2167,6 +2327,10 @@ input[type="range"] {
   .topbar {
     padding: 14px 16px;
     align-items: start;
+  }
+
+  .topbar-copy {
+    width: 100%;
   }
 
   .topbar-actions {
@@ -2206,13 +2370,28 @@ input[type="range"] {
 
   .patient-row-actions,
   .guided-checkin-head,
-  .guided-actions {
+  .guided-actions,
+  .detail-header-actions {
     flex-direction: column;
     align-items: stretch;
   }
 
   .guided-progress-meta {
     align-items: flex-start;
+  }
+
+  .session-topline {
+    margin-left: 0;
+    text-align: left;
+  }
+
+  .session-inline-form,
+  .assignment-button-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .daily-motivation-hero {
+    font-size: clamp(1.35rem, 7vw, 2rem);
   }
 }
 

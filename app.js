@@ -158,12 +158,14 @@ const uiState = {
   currentPatientId: null,
   patientSection: "patientHome",
   therapistSection: "therapistPatients",
+  therapistAssignmentView: "checkin",
   tipFilter: "Tutti",
   taskFilter: "tutte",
   gameFilter: "Tutti",
   progressView: "timeline",
   therapistPatientSearch: "",
   checkinStepIndex: 0,
+  checkinOpen: false,
   patientFormOpen: false,
   selectedBreathingId: BREATHING_EXERCISES[0].id,
   countdownTimer: null,
@@ -210,23 +212,23 @@ async function init() {
 
 function cacheDom() {
   const ids = [
-    "topbar", "topbarLabel", "topbarTitle", "homeShortcutButton", "logoutButton", "patientHeaderStats", "xpFill", "xpText", "xpLevelLabel", "streakValue", "simulateDayButton",
+    "topbar", "topbarLabel", "topbarTitle", "mainMenuButton", "homeShortcutButton", "logoutButton",
     "landingScreen", "patientScreen", "therapistScreen",
     "loginModal", "closeLoginModal", "loginRoleLabel", "loginTitle", "loginText", "loginForm", "usernameInput", "passwordInput", "loginError",
     "detailModal", "closeDetailModal", "detailContent", "toastStack", "xpFloatLayer", "celebrationCanvas",
-    "patientSidebarText", "motivationText", "sessionTitle", "sessionNote", "countDays", "countHours", "countMinutes", "countSeconds", "recentEntriesList", "focusSummary",
+    "motivationText", "sessionTitle", "countDays", "countHours", "countMinutes", "countSeconds", "recentEntriesList", "focusSummary", "openGuidedCheckinButton",
     "sheetDateLabel", "dailySheetForm", "moodRange", "moodValue", "anxietySelect", "emotionChips", "physicalChips", "betterInput", "hardInput", "gratitude1", "gratitude2", "gratitude3", "positiveInput", "noteInput", "customQuestionsBox", "aiQuestionsBox", "advicePreview", "resetSheetButton", "draftStatus",
     "tipFilters", "tipsGrid", "breathingList", "groundingList", "breathingOrb", "breathingPhase", "breathingTitle", "breathingInstruction", "breathingCycle", "breathingTime", "startBreathingButton", "stopBreathingButton",
     "patientGuidedFlow", "checkinPromptTitle", "checkinPromptLabel", "checkinStepCounter", "checkinProgressLabel", "checkinProgressBar", "checkinStepContent", "checkinPrevButton", "checkinNextButton", "assignedGamesList", "taskListCompact",
-    "taskForm", "taskInput", "taskFilters", "taskList", "historyList", "dailyChallengeCard", "homeworkPreviewList", "gamificationSummary", "recentProgressList", "achievementGrid",
+    "taskForm", "taskInput", "taskFilters", "taskList", "historyList", "dailyChallengeCard", "homeworkPreviewList", "gamificationSummary", "recentProgressList", "achievementGrid", "journalForm", "journalTitleInput", "journalBodyInput", "journalList",
     "gameFilters", "gamesGrid", "patientHomeworkList",
-    "therapistSidebarText", "therapistStats", "moodChart", "weeklySummary", "recordList", "selectedPatientBanner", "patientDetailBackButton", "patientDetailIdentity", "patientManagementSummary",
+    "therapistSidebarText", "therapistStats", "moodChart", "weeklySummary", "recordList", "patientDetailBackButton", "patientManagementSummary", "sessionTopline", "openPatientJournalButton", "assignCheckinButton", "assignTipsButton", "assignMinigameButton", "patientCheckinAssignmentList", "patientTipAssignmentList", "therapistPatientMenuButton",
     "tipForm", "tipId", "tipTitle", "tipCategory", "tipType", "tipDescription", "tipContent", "resetTipButton", "manageTipsGrid",
-    "sessionForm", "sessionDateInput", "sessionTimeInput", "sessionNoteInput", "sessionPreview",
+    "sessionForm", "sessionDateInput", "sessionTimeInput", "sessionPreview",
     "questionForm", "questionId", "questionText", "questionType", "questionOptions", "questionOptionsHelp", "questionActive", "resetQuestionButton", "manageQuestionsList",
     "patientAccountForm", "patientAccountId", "patientNameInput", "patientUsernameInput", "patientPasswordInput", "resetPatientAccountButton", "patientSelectionSummary", "patientAccountsList", "patientSearchInput", "openPatientCreateButton", "patientFormPanel", "patientFormTitle",
     "therapistHomeworkGrid", "assignedHomeworkList", "progressViewTabs", "progressTimeline", "radarChart", "heatmapSummaryCards", "heatmapBoard",
-    "homeworkDrawer", "closeHomeworkDrawer", "homeworkAssignForm", "drawerExerciseId", "drawerExerciseTitle", "drawerHomeworkTitle", "drawerHomeworkNote", "drawerHomeworkDueDate", "drawerPriorityPills",
+    "homeworkDrawer", "closeHomeworkDrawer", "homeworkAssignForm", "drawerExerciseId", "drawerExerciseTitle", "drawerHomeworkTitle", "drawerHomeworkNote", "drawerHomeworkDueDate", "drawerPriorityPills", "patientNavDrawer", "closePatientNavDrawer", "therapistPatientDrawer", "closeTherapistPatientDrawer",
     "gameModal", "closeGameModal", "gameModalLabel", "gameModalTitle", "gameModalMeta", "gameModalBody"
   ];
   ids.forEach((id) => {
@@ -245,6 +247,19 @@ function bindEvents() {
   refs.closeDetailModal.addEventListener("click", closeDetailModal);
   refs.closeGameModal.addEventListener("click", closeGameModal);
   refs.closeHomeworkDrawer.addEventListener("click", closeHomeworkDrawer);
+  refs.closePatientNavDrawer?.addEventListener("click", closePatientNavDrawer);
+  refs.closeTherapistPatientDrawer?.addEventListener("click", closeTherapistPatientDrawer);
+
+  refs.patientNavDrawer?.addEventListener("click", (event) => {
+    if (event.target === refs.patientNavDrawer) {
+      closePatientNavDrawer();
+    }
+  });
+  refs.therapistPatientDrawer?.addEventListener("click", (event) => {
+    if (event.target === refs.therapistPatientDrawer) {
+      closeTherapistPatientDrawer();
+    }
+  });
 
   refs.loginModal.addEventListener("click", (event) => {
     if (event.target === refs.loginModal) {
@@ -270,16 +285,35 @@ function bindEvents() {
   refs.loginForm.addEventListener("submit", handleLogin);
   refs.logoutButton.addEventListener("click", logout);
   refs.homeShortcutButton.addEventListener("click", handleHomeShortcut);
-  refs.simulateDayButton.addEventListener("click", simulateDayForTesting);
+  refs.mainMenuButton?.addEventListener("click", handleMainMenuClick);
+  refs.simulateDayButton?.addEventListener("click", simulateDayForTesting);
   refs.patientDetailBackButton?.addEventListener("click", () => switchSection("therapist", "therapistPatients"));
+  refs.therapistPatientMenuButton?.addEventListener("click", openTherapistPatientDrawer);
   refs.openPatientCreateButton?.addEventListener("click", openPatientCreateForm);
   refs.patientSearchInput?.addEventListener("input", handlePatientSearchInput);
+  refs.openGuidedCheckinButton?.addEventListener("click", openGuidedCheckin);
   refs.checkinPrevButton?.addEventListener("click", goToPreviousCheckinStep);
   refs.checkinNextButton?.addEventListener("click", goToNextCheckinStep);
   refs.checkinStepContent?.addEventListener("input", handleGuidedCheckinInput);
   refs.checkinStepContent?.addEventListener("change", handleGuidedCheckinInput);
   refs.checkinStepContent?.addEventListener("click", handleGuidedCheckinClick);
   refs.assignedGamesList?.addEventListener("click", handleGameCardActions);
+  document.querySelectorAll("[data-open-patient-view]").forEach((button) => {
+    button.addEventListener("click", () => switchSection("patient", button.dataset.openPatientView));
+  });
+  refs.patientNavDrawer?.querySelectorAll("[data-menu-target]").forEach((button) => {
+    button.addEventListener("click", () => {
+      switchSection("patient", button.dataset.menuTarget);
+      closePatientNavDrawer();
+    });
+  });
+  refs.therapistPatientDrawer?.querySelectorAll("[data-therapist-jump]").forEach((button) => {
+    button.addEventListener("click", () => {
+      uiState.therapistAssignmentView = button.dataset.therapistJump;
+      closeTherapistPatientDrawer();
+      renderTherapistDashboard();
+    });
+  });
 
   document.querySelectorAll("[data-role-area]").forEach((button) => {
     button.addEventListener("click", () => switchSection(button.dataset.roleArea, button.dataset.target));
@@ -329,16 +363,22 @@ function bindEvents() {
   refs.stopBreathingButton.addEventListener("click", () => stopBreathing(true));
 
   refs.taskForm.addEventListener("submit", addTask);
-  refs.taskFilters.addEventListener("click", handleTaskFilterClick);
+  refs.taskFilters?.addEventListener("click", handleTaskFilterClick);
   refs.taskList.addEventListener("click", handleTaskActions);
   refs.historyList.addEventListener("click", handleHistoryOpen);
   refs.recordList.addEventListener("click", handleRecordActions);
+  refs.journalForm?.addEventListener("submit", saveJournalEntry);
+  refs.journalList?.addEventListener("click", handleJournalActions);
+  refs.openPatientJournalButton?.addEventListener("click", openPatientJournalDetail);
 
   refs.tipForm.addEventListener("submit", saveTip);
   refs.resetTipButton.addEventListener("click", resetTipForm);
   refs.manageTipsGrid.addEventListener("click", handleManageTipActions);
 
   refs.sessionForm.addEventListener("submit", saveSession);
+  refs.assignCheckinButton?.addEventListener("click", () => setTherapistAssignmentView("checkin"));
+  refs.assignTipsButton?.addEventListener("click", () => setTherapistAssignmentView("tips"));
+  refs.assignMinigameButton?.addEventListener("click", () => setTherapistAssignmentView("minigame"));
   refs.questionForm.addEventListener("submit", saveQuestion);
   refs.resetQuestionButton.addEventListener("click", resetQuestionForm);
   refs.questionType.addEventListener("change", updateQuestionOptionsState);
@@ -361,6 +401,8 @@ function bindEvents() {
   refs.gameModalBody.addEventListener("click", handleGameClick);
   refs.gameModalBody.addEventListener("input", handleGameInput);
   refs.gameModalBody.addEventListener("change", handleGameChange);
+  refs.patientCheckinAssignmentList?.addEventListener("change", handleAssignmentListChange);
+  refs.patientTipAssignmentList?.addEventListener("change", handleAssignmentListChange);
 }
 
 function loadState() {
@@ -484,6 +526,10 @@ function sanitizePatient(patient) {
     tasks: Array.isArray(patient.tasks) ? patient.tasks.map(sanitizeTask).filter(Boolean) : [],
     entries: Array.isArray(patient.entries) ? patient.entries.map(sanitizeEntry).filter(Boolean) : [],
     homeworks: Array.isArray(patient.homeworks) ? patient.homeworks.map(sanitizeHomework).filter(Boolean) : [],
+    assignedTipIds: Array.isArray(patient.assignedTipIds) ? patient.assignedTipIds.map(String) : [],
+    assignedQuestionIds: Array.isArray(patient.assignedQuestionIds) ? patient.assignedQuestionIds.map(String) : [],
+    journal: Array.isArray(patient.journal) ? patient.journal.map(sanitizeJournalEntry).filter(Boolean) : [],
+    checkinEnabled: patient.checkinEnabled !== false,
     exerciseHistory: Array.isArray(patient.exerciseHistory) ? patient.exerciseHistory.map(sanitizeProgress).filter(Boolean) : [],
     stats: sanitizeStats(patient.stats),
     gameData: patient.gameData && typeof patient.gameData === "object" ? patient.gameData : {},
@@ -497,7 +543,7 @@ function sanitizeSession(session) {
   return {
     date: isDateInput(session?.date) ? session.date : dateOffset(7),
     time: isTimeInput(session?.time) ? session.time : "18:30",
-    note: String(session?.note || "Nessuna nota aggiunta.")
+    note: String(session?.note || "")
   };
 }
 
@@ -552,6 +598,22 @@ function sanitizeTask(task) {
     title,
     completed: Boolean(task.completed),
     createdAt: String(task.createdAt || new Date().toISOString())
+  };
+}
+
+function sanitizeJournalEntry(entry) {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+  const body = String(entry.body || "").trim();
+  if (!body) {
+    return null;
+  }
+  return {
+    id: String(entry.id || `journal-${Date.now()}`),
+    title: String(entry.title || "Pensiero del giorno").trim(),
+    body,
+    createdAt: String(entry.createdAt || new Date().toISOString())
   };
 }
 
@@ -814,7 +876,7 @@ function createPatientAccount(name, username, password) {
     session: {
       date: dateOffset(7),
       time: "18:30",
-      note: "Nessuna nota aggiunta."
+      note: ""
     },
     tasks: [
       createTask("Fare una passeggiata di 10 minuti", false),
@@ -825,6 +887,10 @@ function createPatientAccount(name, username, password) {
     ],
     entries: [],
     homeworks: [],
+    assignedTipIds: [],
+    assignedQuestionIds: [],
+    checkinEnabled: true,
+    journal: [],
     exerciseHistory: [],
     stats: {
       xp: 0,
@@ -876,8 +942,8 @@ function renderShell() {
   refs.landingScreen.classList.toggle("hidden", loggedIn);
   refs.patientScreen.classList.toggle("hidden", uiState.currentRole !== "patient");
   refs.therapistScreen.classList.toggle("hidden", uiState.currentRole !== "therapist");
-  refs.patientHeaderStats.classList.toggle("hidden", uiState.currentRole !== "patient");
-  refs.simulateDayButton.classList.add("hidden");
+  refs.patientHeaderStats?.classList.add("hidden");
+  refs.simulateDayButton?.classList.add("hidden");
 
   if (!loggedIn) {
     return;
@@ -889,7 +955,7 @@ function renderShell() {
   if (uiState.currentRole === "patient") {
     refs.topbarLabel.textContent = "Area paziente";
     refs.topbarTitle.textContent = sectionLabel(uiState.patientSection);
-    refs.homeShortcutButton.textContent = "Home";
+    refs.homeShortcutButton.textContent = "Oggi";
     refs.homeShortcutButton.classList.add("hidden");
   } else {
     refs.topbarLabel.textContent = "Area psicologo";
@@ -912,23 +978,18 @@ function renderShell() {
 function renderPatientHome() {
   const patient = getSelectedPatient();
   if (!patient) {
-    refs.patientSidebarText.textContent = "Quando il tuo psicologo creerà il profilo, troverai qui il percorso guidato della giornata.";
-    refs.assignedGamesList.innerHTML = `<div class="empty-state">I mini-giochi assegnati appariranno qui.</div>`;
-    refs.patientHomeworkList.innerHTML = `<div class="empty-state">Gli homework assegnati appariranno qui.</div>`;
-    refs.taskListCompact.innerHTML = "";
+    refs.motivationText.textContent = getDailyMotivation();
+    refs.patientGuidedFlow.classList.add("hidden");
     renderGuidedCheckin();
     return;
   }
 
-  const entries = getEntriesDescending();
-  const latest = entries[0];
-  refs.patientSidebarText.textContent = latest
-    ? getMotivationFromEntry(latest)
-    : "Inizia dal check-in: una domanda alla volta, senza fretta.";
-
+  refs.motivationText.textContent = getDailyMotivation();
+  refs.patientGuidedFlow.classList.toggle("hidden", !uiState.checkinOpen);
   renderGuidedCheckin();
   renderAssignedGames();
-  renderPatientTaskSummary();
+  renderPatientHomework();
+  renderJournal();
 }
 
 function renderSheet() {
@@ -1026,7 +1087,7 @@ function getGuidedCheckinSteps() {
     }
   ];
 
-  state.customQuestions.filter((item) => item.active).forEach((question) => {
+  state.customQuestions.filter((item) => item.active && isQuestionAssignedToPatient(question.id)).forEach((question) => {
     steps.push({
       id: `custom-${question.id}`,
       title: question.text,
@@ -1093,6 +1154,18 @@ function renderGuidedCustomQuestion(question) {
 
 function renderGuidedCheckin() {
   const patient = getSelectedPatient();
+  if (patient && patient.checkinEnabled === false) {
+    refs.checkinPromptTitle.textContent = "Check-in non assegnato";
+    refs.checkinPromptLabel.textContent = "Il tuo psicologo non ha ancora attivato il check-in per questo profilo.";
+    refs.checkinStepCounter.textContent = "0 / 0";
+    refs.checkinProgressLabel.textContent = "In attesa";
+    refs.checkinProgressBar.style.width = "0%";
+    refs.checkinStepContent.innerHTML = `<div class="empty-state">Quando il check-in sarà assegnato, lo troverai qui.</div>`;
+    refs.checkinPrevButton.disabled = true;
+    refs.checkinNextButton.disabled = true;
+    refs.draftStatus.innerHTML = `<strong>Check-in non attivo.</strong> Torna più tardi oppure contatta il tuo psicologo.`;
+    return;
+  }
   uiState.gameState.aiQuestions = buildAiQuestions(uiState.draft);
   const steps = getGuidedCheckinSteps();
   uiState.checkinStepIndex = clamp(uiState.checkinStepIndex, 0, Math.max(steps.length - 1, 0));
@@ -1292,12 +1365,19 @@ function renderDynamicSheet() {
 }
 
 function renderTips() {
-  const categories = ["Tutti", ...new Set(state.tips.map((tip) => tip.category))];
+  const patient = getSelectedPatient();
+  const availableTips = uiState.currentRole === "patient"
+    ? state.tips.filter((tip) => patient?.assignedTipIds?.includes(tip.id))
+    : state.tips;
+  const categories = ["Tutti", ...new Set(availableTips.map((tip) => tip.category))];
+  if (!categories.includes(uiState.tipFilter)) {
+    uiState.tipFilter = "Tutti";
+  }
   refs.tipFilters.innerHTML = categories.map((item) => `
     <button class="filter-pill ${uiState.tipFilter === item ? "active" : ""}" type="button" data-tip-filter="${escapeAttribute(item)}">${escapeHtml(item)}</button>
   `).join("");
 
-  const tips = state.tips.filter((tip) => uiState.tipFilter === "Tutti" || tip.category === uiState.tipFilter);
+  const tips = availableTips.filter((tip) => uiState.tipFilter === "Tutti" || tip.category === uiState.tipFilter);
   refs.tipsGrid.innerHTML = tips.length ? tips.map((tip) => `
     <article class="tip-card">
       <div class="meta-row">
@@ -1355,24 +1435,10 @@ function renderTasks() {
     refs.taskFilters.innerHTML = "";
     return;
   }
-  const filters = [
-    { id: "tutte", label: "Tutte" },
-    { id: "da-fare", label: "Da fare" },
-    { id: "completate", label: "Completate" }
-  ];
-  refs.taskFilters.innerHTML = filters.map((item) => `
-    <button class="filter-pill ${uiState.taskFilter === item.id ? "active" : ""}" type="button" data-task-filter="${item.id}">${item.label}</button>
-  `).join("");
-
-  const tasks = patient.tasks.filter((task) => {
-    if (uiState.taskFilter === "completate") {
-      return task.completed;
-    }
-    if (uiState.taskFilter === "da-fare") {
-      return !task.completed;
-    }
-    return true;
-  });
+  if (refs.taskFilters) {
+    refs.taskFilters.innerHTML = "";
+  }
+  const tasks = patient.tasks;
 
   refs.taskList.innerHTML = tasks.length ? tasks.map((task) => `
     <article class="task-card ${task.completed ? "completed" : ""}">
@@ -1402,13 +1468,12 @@ function renderHistory() {
 }
 
 function renderGames() {
-  const categories = ["Tutti", ...new Set(GAME_LIBRARY.map((game) => game.category))];
-  refs.gameFilters.innerHTML = categories.map((item) => `
-    <button class="filter-pill ${uiState.gameFilter === item ? "active" : ""}" type="button" data-game-filter="${escapeAttribute(item)}">${escapeHtml(item)}</button>
-  `).join("");
-
   const patient = getSelectedPatient();
-  const visible = GAME_LIBRARY.filter((game) => uiState.gameFilter === "Tutti" || game.category === uiState.gameFilter);
+  const assignedIds = patient ? [...new Set(patient.homeworks.map((item) => item.exerciseId))] : [];
+  if (refs.gameFilters) {
+    refs.gameFilters.innerHTML = "";
+  }
+  const visible = GAME_LIBRARY.filter((game) => !patient || assignedIds.includes(game.id));
   refs.gamesGrid.innerHTML = visible.map((game) => {
     const assigned = patient?.homeworks.some((item) => item.exerciseId === game.id && item.status === "assegnato");
     return `
@@ -1464,6 +1529,31 @@ function renderPatientHomework() {
   }).join("") : `<div class="empty-state">Non hai homework attivi in questo momento.</div>`;
 }
 
+function renderJournal() {
+  const patient = getSelectedPatient();
+  if (!refs.journalList) {
+    return;
+  }
+  if (!patient) {
+    refs.journalList.innerHTML = `<div class="empty-state">Il diario personale sarà disponibile quando il profilo sarà attivo.</div>`;
+    return;
+  }
+  const list = [...patient.journal].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  refs.journalList.innerHTML = list.length ? list.map((entry) => `
+    <article class="record-card">
+      <div class="meta-row">
+        <span class="meta-pill">${escapeHtml(formatLongDate(entry.createdAt.slice(0, 10)))}</span>
+      </div>
+      <strong>${escapeHtml(entry.title || "Pensiero del giorno")}</strong>
+      <span>${escapeHtml(makePreview(entry.body, 140))}</span>
+      <div class="tip-actions">
+        <button class="ghost-button small-button" type="button" data-journal-open="${escapeAttribute(entry.id)}">Apri</button>
+        <button class="ghost-button small-button" type="button" data-journal-delete="${escapeAttribute(entry.id)}">Elimina</button>
+      </div>
+    </article>
+  `).join("") : `<div class="empty-state">Il diario è ancora vuoto. Puoi iniziare a scrivere quando vuoi.</div>`;
+}
+
 function renderAchievements() {
   const patient = getSelectedPatient();
   if (!patient) {
@@ -1512,20 +1602,20 @@ function renderAchievements() {
 function renderTherapistDashboard() {
   const patient = getSelectedPatient();
   if (!patient) {
-    refs.selectedPatientBanner.innerHTML = `<strong>Nessun paziente selezionato.</strong> Vai alla lista pazienti per aprire un profilo.`;
     refs.therapistSidebarText.textContent = "Entra direttamente nella lista pazienti per cercare, creare o aprire un profilo.";
-    refs.patientDetailIdentity.textContent = "Progressi del paziente";
     refs.patientManagementSummary.innerHTML = `<div class="empty-state">Apri un paziente per gestire sessioni, mini-giochi e homework.</div>`;
     refs.therapistStats.innerHTML = `<div class="empty-state">Ancora nessun paziente selezionato.</div>`;
     refs.weeklySummary.innerHTML = `<div class="empty-state">Le statistiche settimanali appariranno qui.</div>`;
     refs.moodChart.innerHTML = `<div class="empty-state">Il grafico si popolerà con le compilazioni del paziente selezionato.</div>`;
     refs.recordList.innerHTML = `<div class="empty-state">Le schede compilate appariranno qui.</div>`;
+    refs.sessionTopline.textContent = "";
+    refs.patientCheckinAssignmentList.innerHTML = `<div class="empty-state">Apri un paziente per gestire il check-in.</div>`;
+    refs.patientTipAssignmentList.innerHTML = `<div class="empty-state">Apri un paziente per assegnare le tips.</div>`;
     return;
   }
 
-  refs.selectedPatientBanner.innerHTML = `<strong>Paziente attivo:</strong> ${escapeHtml(patient.name)} · ${escapeHtml(patient.username)}`;
   refs.therapistSidebarText.textContent = `Apri un paziente, leggi l'andamento e assegna subito il prossimo passo terapeutico.`;
-  refs.patientDetailIdentity.textContent = patient.name;
+  refs.sessionTopline.textContent = `Prossima seduta: ${formatSessionLong(patient.session)}`;
 
   const recentEntries = entriesWithinDays(7);
   const avgMood = recentEntries.length ? (recentEntries.reduce((sum, item) => sum + item.mood, 0) / recentEntries.length).toFixed(1) : "-";
@@ -1550,15 +1640,24 @@ function renderTherapistDashboard() {
   refs.weeklySummary.innerHTML = `
     <p>L'emozione più ricorrente negli ultimi giorni è <strong>${escapeHtml(recurringEmotion)}</strong>.</p>
     <p>Il paziente ha <strong>${assigned}</strong> attività ancora attive e <strong>${patient.homeworks.filter((item) => item.status === "completato").length}</strong> homework già completati.</p>
-    <p>XP accumulati: <strong>${patient.stats.xp}</strong> · Livello <strong>${patient.stats.level}</strong> · Streak <strong>${patient.stats.streak}</strong> giorni.</p>
+    <p>Attività giornaliere completate: <strong>${patient.tasks.filter((item) => item.completed).length}</strong> su <strong>${patient.tasks.length}</strong>.</p>
+    <p>Voci di diario salvate: <strong>${patient.journal.length}</strong>.</p>
+    <div class="detail-list">
+      ${patient.tasks.length ? patient.tasks.map((task) => `
+        <div class="compact-task-row ${task.completed ? "completed" : ""}">
+          <span class="compact-task-bullet">${task.completed ? "●" : "○"}</span>
+          <span>${escapeHtml(task.title)}</span>
+        </div>
+      `).join("") : `<div class="empty-state">Nessuna attività giornaliera presente.</div>`}
+    </div>
   `;
 
   refs.patientManagementSummary.innerHTML = `
-    <p><strong>Accesso rapido:</strong> da qui puoi assegnare o rimuovere mini-giochi, aggiornare i contenuti attivi e impostare la prossima seduta.</p>
-    <p><strong>Impostazioni paziente:</strong> usa il pulsante <em>Torna ai pazienti</em> per modificare dati anagrafici, credenziali e impostazioni dell'account.</p>
+    <p>Usa i tre pulsanti qui sopra per assegnare o togliere check-in, tips e minigame al paziente.</p>
   `;
 
   renderMoodChart();
+  renderPatientAssignments();
 }
 
 function renderRecords() {
@@ -1608,10 +1707,8 @@ function renderSession() {
   }
   refs.sessionDateInput.value = patient.session.date;
   refs.sessionTimeInput.value = patient.session.time;
-  refs.sessionNoteInput.value = patient.session.note;
   refs.sessionPreview.innerHTML = `
-    <p><strong>Data e ora:</strong> ${escapeHtml(formatSessionLong(patient.session))}</p>
-    <p><strong>Nota:</strong> ${escapeHtml(patient.session.note)}</p>
+    <p><strong>Prossima seduta:</strong> ${escapeHtml(formatSessionLong(patient.session))}</p>
   `;
 }
 
@@ -1636,35 +1733,24 @@ function renderPatients() {
   const patient = getSelectedPatient();
   refs.patientSelectionSummary.innerHTML = patient ? `
     <p><strong>Profilo selezionato:</strong> ${escapeHtml(patient.name)}</p>
-    <p>${escapeHtml(patient.entries.length.toString())} schede · ${escapeHtml(patient.homeworks.filter((item) => item.status === "assegnato").length.toString())} attività attive · livello ${escapeHtml(patient.stats.level.toString())}</p>
   ` : `<div class="empty-state">Nessun paziente selezionato.</div>`;
 
   const search = uiState.therapistPatientSearch.trim().toLowerCase();
   const filtered = state.patients.filter((item) => item.name.toLowerCase().includes(search));
   refs.patientAccountsList.innerHTML = filtered.length ? filtered.map((item) => {
-    const active = uiState.currentPatientId === item.id;
-    const nextSession = formatSessionShort(item.session);
-    const info = item.entries.length
-      ? `Umore medio recente ${getAverageMood(item.entries.slice(0, 5)).toFixed(1)} · ${item.entries.length} schede`
-      : "Nessuna scheda ancora compilata";
     return `
-      <article class="patient-row-card ${active ? "selected-card" : ""}" data-patient-open="${escapeAttribute(item.id)}">
-        <div class="patient-row-avatar">${escapeHtml(getInitials(item.name))}</div>
+      <article class="patient-row-card" data-patient-open="${escapeAttribute(item.id)}">
         <div class="patient-row-main">
           <div class="patient-row-head">
             <strong>${escapeHtml(item.name)}</strong>
-            <span class="meta-pill secondary">${escapeHtml(item.username)}</span>
           </div>
-          <p class="patient-row-info">${escapeHtml(info)}</p>
+          <p class="patient-row-info">${item.entries.length ? `${item.entries.length} schede compilate` : "Nessuna scheda compilata"}</p>
           <div class="patient-row-meta">
-            <span class="meta-pill">Seduta ${escapeHtml(nextSession)}</span>
             <span class="meta-pill tertiary">${item.homeworks.filter((homework) => homework.status === "assegnato").length} attivi</span>
           </div>
         </div>
         <div class="patient-row-actions">
-          <button class="primary-button small-button" type="button" data-patient-select="${escapeAttribute(item.id)}">Apri</button>
-          <button class="ghost-button small-button" type="button" data-patient-edit="${escapeAttribute(item.id)}">Impostazioni</button>
-          <button class="ghost-button small-button" type="button" data-patient-delete="${escapeAttribute(item.id)}">Elimina</button>
+          <button class="primary-button small-button" type="button" data-patient-select="${escapeAttribute(item.id)}">Gestisci</button>
         </div>
       </article>
     `;
@@ -1711,6 +1797,42 @@ function renderTherapistHomework() {
   refs.drawerPriorityPills.innerHTML = ["Bassa", "Media", "Alta"].map((priority) => `
     <button class="priority-pill ${priority.toLowerCase()} ${uiState.homeworkPriority === priority ? "active" : ""}" type="button" data-priority="${priority}">${priority}</button>
   `).join("");
+}
+
+function renderPatientAssignments() {
+  const patient = getSelectedPatient();
+  if (!patient) {
+    return;
+  }
+  refs.assignCheckinButton?.classList.toggle("active", uiState.therapistAssignmentView === "checkin");
+  refs.assignTipsButton?.classList.toggle("active", uiState.therapistAssignmentView === "tips");
+  refs.assignMinigameButton?.classList.toggle("active", uiState.therapistAssignmentView === "minigame");
+  document.querySelectorAll(".assignment-card").forEach((card) => {
+    const mini = card.querySelector(".mini-label")?.textContent?.toLowerCase() || "";
+    const view = uiState.therapistAssignmentView;
+    const visible = (view === "checkin" && mini.includes("check-in")) || (view === "tips" && mini.includes("tips")) || (view === "minigame" && mini.includes("minigame"));
+    card.classList.toggle("hidden", !visible);
+  });
+
+  refs.patientCheckinAssignmentList.innerHTML = `
+    <label class="assignment-toggle-row">
+      <input type="checkbox" ${patient.checkinEnabled ? "checked" : ""} data-toggle-checkin>
+      <span>Check-in giornaliero attivo</span>
+    </label>
+    ${state.customQuestions.length ? state.customQuestions.map((question) => `
+      <label class="assignment-toggle-row">
+        <input type="checkbox" data-assign-question="${escapeAttribute(question.id)}" ${patient.assignedQuestionIds.includes(question.id) ? "checked" : ""}>
+        <span>${escapeHtml(question.text)}</span>
+      </label>
+    `).join("") : `<div class="empty-state">Non ci sono ancora domande personalizzate da assegnare.</div>`}
+  `;
+
+  refs.patientTipAssignmentList.innerHTML = state.tips.length ? state.tips.map((tip) => `
+    <label class="assignment-toggle-row">
+      <input type="checkbox" data-assign-tip="${escapeAttribute(tip.id)}" ${patient.assignedTipIds.includes(tip.id) ? "checked" : ""}>
+      <span>${escapeHtml(tip.title)}</span>
+    </label>
+  `).join("") : `<div class="empty-state">Non ci sono tips disponibili da assegnare.</div>`;
 }
 
 function renderProgressViews() {
@@ -1830,6 +1952,9 @@ function renderHeatmap() {
 }
 
 function renderXpHeader() {
+  if (!refs.xpFill || !refs.xpText || !refs.xpLevelLabel || !refs.streakValue) {
+    return;
+  }
   const patient = getSelectedPatient();
   if (!patient || uiState.currentRole !== "patient") {
     refs.xpFill.style.width = "0%";
@@ -1939,6 +2064,7 @@ async function handleLogin(event) {
     } else {
       uiState.patientSection = "patientHome";
       uiState.checkinStepIndex = 0;
+      uiState.checkinOpen = false;
       switchSection("patient", "patientHome");
     }
     closeLoginModal();
@@ -1970,6 +2096,7 @@ function logout() {
   uiState.progressView = "timeline";
   uiState.therapistPatientSearch = "";
   uiState.checkinStepIndex = 0;
+  uiState.checkinOpen = false;
   uiState.patientFormOpen = false;
   uiState.draft = createEmptyDraft();
   state = createDemoState();
@@ -1983,6 +2110,43 @@ function handleHomeShortcut() {
   } else if (uiState.currentRole === "therapist") {
     switchSection("therapist", "therapistPatients");
   }
+}
+
+function handleMainMenuClick() {
+  if (uiState.currentRole === "patient") {
+    refs.patientNavDrawer.classList.remove("hidden");
+    refs.patientNavDrawer.setAttribute("aria-hidden", "false");
+    document.body.classList.add("modal-open");
+  } else if (uiState.currentRole === "therapist") {
+    switchSection("therapist", "therapistPatients");
+  }
+}
+
+function closePatientNavDrawer() {
+  refs.patientNavDrawer?.classList.add("hidden");
+  refs.patientNavDrawer?.setAttribute("aria-hidden", "true");
+  if (!uiState.activeModal && refs.homeworkDrawer.classList.contains("hidden") && refs.therapistPatientDrawer.classList.contains("hidden")) {
+    document.body.classList.remove("modal-open");
+  }
+}
+
+function openTherapistPatientDrawer() {
+  refs.therapistPatientDrawer?.classList.remove("hidden");
+  refs.therapistPatientDrawer?.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+}
+
+function closeTherapistPatientDrawer() {
+  refs.therapistPatientDrawer?.classList.add("hidden");
+  refs.therapistPatientDrawer?.setAttribute("aria-hidden", "true");
+  if (!uiState.activeModal && refs.homeworkDrawer.classList.contains("hidden") && refs.patientNavDrawer.classList.contains("hidden")) {
+    document.body.classList.remove("modal-open");
+  }
+}
+
+function setTherapistAssignmentView(view) {
+  uiState.therapistAssignmentView = view;
+  renderTherapistDashboard();
 }
 
 function switchSection(role, target) {
@@ -2000,6 +2164,8 @@ function switchSection(role, target) {
     });
   }
   renderShell();
+  closePatientNavDrawer();
+  closeTherapistPatientDrawer();
   refreshRevealTargets();
 }
 
@@ -2102,6 +2268,38 @@ function handleAssignedHomeworkActions(event) {
   }
 }
 
+function handleAssignmentListChange(event) {
+  const patient = getSelectedPatient();
+  if (!patient) {
+    return;
+  }
+  const tipId = event.target.dataset.assignTip;
+  const questionId = event.target.dataset.assignQuestion;
+  if (event.target.dataset.toggleCheckin !== undefined) {
+    patient.checkinEnabled = event.target.checked;
+    saveCurrentPatient();
+    renderAll();
+    return;
+  }
+  if (tipId) {
+    const next = new Set(patient.assignedTipIds);
+    if (event.target.checked) next.add(tipId);
+    else next.delete(tipId);
+    patient.assignedTipIds = [...next];
+    saveCurrentPatient();
+    renderAll();
+    return;
+  }
+  if (questionId) {
+    const next = new Set(patient.assignedQuestionIds);
+    if (event.target.checked) next.add(questionId);
+    else next.delete(questionId);
+    patient.assignedQuestionIds = [...next];
+    saveCurrentPatient();
+    renderAll();
+  }
+}
+
 function handlePrioritySelect(event) {
   const button = event.target.closest("[data-priority]");
   if (!button) {
@@ -2109,6 +2307,12 @@ function handlePrioritySelect(event) {
   }
   uiState.homeworkPriority = button.dataset.priority;
   renderTherapistHomework();
+}
+
+function openGuidedCheckin() {
+  uiState.checkinOpen = true;
+  refs.patientGuidedFlow.classList.remove("hidden");
+  renderGuidedCheckin();
 }
 
 function handleProgressTabClick(event) {
@@ -2295,7 +2499,7 @@ function saveSession(event) {
   patient.session = {
     date: refs.sessionDateInput.value,
     time: refs.sessionTimeInput.value,
-    note: refs.sessionNoteInput.value.trim() || "Nessuna nota aggiunta."
+    note: ""
   };
   saveCurrentPatient();
   renderAll();
@@ -2566,6 +2770,75 @@ function handleTaskActions(event) {
     renderTasks();
     showToast("Attività eliminata", "L'attività è stata rimossa.");
   }
+}
+
+function saveJournalEntry(event) {
+  event.preventDefault();
+  const patient = getSelectedPatient();
+  if (!patient) {
+    return;
+  }
+  const body = refs.journalBodyInput.value.trim();
+  const title = refs.journalTitleInput.value.trim() || "Pensiero del giorno";
+  if (!body) {
+    showToast("Diario vuoto", "Scrivi qualcosa prima di salvare nel diario.");
+    return;
+  }
+  patient.journal.unshift(sanitizeJournalEntry({
+    id: `journal-${Date.now()}`,
+    title,
+    body,
+    createdAt: new Date().toISOString()
+  }));
+  refs.journalForm.reset();
+  saveCurrentPatient();
+  renderJournal();
+  showToast("Diario salvato", "La voce del diario è stata aggiunta con successo.");
+}
+
+function handleJournalActions(event) {
+  const open = event.target.closest("[data-journal-open]");
+  const remove = event.target.closest("[data-journal-delete]");
+  const patient = getSelectedPatient();
+  if (!patient) {
+    return;
+  }
+  if (open) {
+    const entry = patient.journal.find((item) => item.id === open.dataset.journalOpen);
+    if (entry) {
+      openDetailModal(`
+        <p class="mini-label">Diario personale</p>
+        <h2 class="detail-title" id="detailTitle">${escapeHtml(entry.title)}</h2>
+        <div class="detail-section"><strong>${escapeHtml(formatLongDate(entry.createdAt.slice(0, 10)))}</strong></div>
+        <div class="detail-section"><p class="detail-copy">${escapeHtml(entry.body)}</p></div>
+      `);
+    }
+  }
+  if (remove) {
+    patient.journal = patient.journal.filter((item) => item.id !== remove.dataset.journalDelete);
+    saveCurrentPatient();
+    renderJournal();
+    showToast("Voce eliminata", "La voce del diario è stata rimossa.");
+  }
+}
+
+function openPatientJournalDetail() {
+  const patient = getSelectedPatient();
+  if (!patient) {
+    return;
+  }
+  const content = patient.journal.length ? patient.journal.map((entry) => `
+    <div class="detail-section">
+      <strong>${escapeHtml(entry.title)}</strong>
+      <p>${escapeHtml(formatLongDate(entry.createdAt.slice(0, 10)))}</p>
+      <p class="detail-copy">${escapeHtml(entry.body)}</p>
+    </div>
+  `).join("") : `<div class="detail-section"><p>Nessuna voce del diario disponibile.</p></div>`;
+  openDetailModal(`
+    <p class="mini-label">Diario personale</p>
+    <h2 class="detail-title" id="detailTitle">${escapeHtml(patient.name)}</h2>
+    <div class="detail-list">${content}</div>
+  `);
 }
 
 function handleRecordActions(event) {
@@ -3822,7 +4095,6 @@ function updateCountdown() {
   const target = getSessionDate(getSelectedPatient()?.session);
   if (!target) {
     refs.sessionTitle.textContent = "Seduta da impostare";
-    refs.sessionNote.textContent = "Lo psicologo potrà aggiornare data e ora dalla dashboard.";
     ["countDays", "countHours", "countMinutes", "countSeconds"].forEach((id) => refs[id].textContent = "00");
     return;
   }
@@ -3830,7 +4102,6 @@ function updateCountdown() {
   const diff = target.getTime() - now.getTime();
   if (diff <= 0) {
     refs.sessionTitle.textContent = "Seduta da aggiornare";
-    refs.sessionNote.textContent = "L'orario impostato è trascorso. Attendi il prossimo aggiornamento.";
     ["countDays", "countHours", "countMinutes", "countSeconds"].forEach((id) => refs[id].textContent = "00");
     return;
   }
@@ -3839,7 +4110,6 @@ function updateCountdown() {
   refs.countMinutes.textContent = pad(Math.floor((diff / (1000 * 60)) % 60));
   refs.countSeconds.textContent = pad(Math.floor((diff / 1000) % 60));
   refs.sessionTitle.textContent = formatSessionLong(getSelectedPatient().session);
-  refs.sessionNote.textContent = getSelectedPatient().session.note || "Nessuna nota aggiunta.";
 }
 
 function startBreathing() {
@@ -3967,6 +4237,23 @@ function renderChipSet(values, selected) {
   `).join("");
 }
 
+function isQuestionAssignedToPatient(questionId) {
+  const patient = getSelectedPatient();
+  if (!patient) {
+    return false;
+  }
+  if (!patient.assignedQuestionIds.length) {
+    return true;
+  }
+  return patient.assignedQuestionIds.includes(questionId);
+}
+
+function getDailyMotivation() {
+  const seed = formatDateInput(new Date()).split("-").join("");
+  const index = Number(seed) % MOTIVATIONS.length;
+  return MOTIVATIONS[index];
+}
+
 function buildAiQuestions(draft) {
   const questions = [];
   const gratitudeCount = draft.gratitude.filter((item) => item.trim()).length;
@@ -4079,6 +4366,9 @@ function handleGlobalKeydown(event) {
     if (uiState.activeModal === "game") closeGameModal();
     else if (uiState.activeModal === "detail") closeDetailModal();
     else if (uiState.activeModal === "login") closeLoginModal();
+    else if (refs.homeworkDrawer && !refs.homeworkDrawer.classList.contains("hidden")) closeHomeworkDrawer();
+    else if (refs.patientNavDrawer && !refs.patientNavDrawer.classList.contains("hidden")) closePatientNavDrawer();
+    else if (refs.therapistPatientDrawer && !refs.therapistPatientDrawer.classList.contains("hidden")) closeTherapistPatientDrawer();
   }
 }
 
@@ -5464,15 +5754,16 @@ function findGame(id) {
 function sectionLabel(id) {
   return {
     patientHome: "Oggi",
-    patientSheet: "Scheda giornaliera",
+    patientSheet: "Check-in quotidiano",
     patientTips: "Tips",
-    patientGames: "Mini-giochi",
-    patientHomework: "Homework",
-    patientTasks: "Attività",
+    patientGames: "Minigame",
+    patientJournal: "Diario personale",
+    patientHomework: "Minigame",
+    patientTasks: "Attività giornaliere",
     patientAchievements: "Achievement",
     patientHistory: "Storico",
     therapistDashboard: "Dettaglio paziente",
-    therapistPatients: "Pazienti",
+    therapistPatients: "Gestione pazienti",
     therapistHomework: "Assegnazione homework",
     therapistProgress: "Timeline progressi",
     therapistRecords: "Schede compilate",
